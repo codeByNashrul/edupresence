@@ -13,10 +13,7 @@ export default function KelasPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<Kelas | null>(null);
-  const [form, setForm] = useState({
-    nama: "",
-    tingkat: "",
-  });
+  const [form, setForm] = useState({ nama: "" });
   const [error, setError] = useState("");
 
   async function fetchKelas() {
@@ -39,7 +36,7 @@ export default function KelasPage() {
 
   function openEdit(k: Kelas) {
     setEditData(k);
-    setForm({ nama: k.nama, tingkat: k.tingkat });
+    setForm({ nama: k.nama }); // hapus tingkat
     setError("");
     setShowForm(true);
   }
