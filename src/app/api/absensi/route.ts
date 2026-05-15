@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
 
 export async function POST(req: Request) {
   try {
@@ -13,17 +14,13 @@ export async function POST(req: Request) {
     const { kodeQr } = await req.json();
     const userId = session.user.id;
     const role = session.user.role;
-    const now = new Date();
-
+    const now = nowJakarta();
     const pengaturan = await prisma.pengaturan.findFirst();
     const toleransi = pengaturan?.toleransiMenit ?? 15;
 
-    const tanggal = new Date(now);
-    tanggal.setHours(0, 0, 0, 0);
+    const tanggal = todayJakarta();
 
-    const jamSekarang = `${String(now.getHours()).padStart(2, "0")}:${String(
-      now.getMinutes(),
-    ).padStart(2, "0")}`;
+    const jamSekarang = timeJakarta();
 
     let tipe: "BERANGKAT" | "JAM_MENGAJAR" | "PULANG";
     let ruanganId: string | null = null;

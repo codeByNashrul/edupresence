@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
 
 export async function GET() {
   try {
@@ -10,9 +11,8 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const now = new Date();
-    const tanggal = new Date(now);
-    tanggal.setHours(0, 0, 0, 0);
+    const now = nowJakarta();
+    const tanggal = todayJakarta();
 
     const hariMap: Record<number, string> = {
       1: "SENIN",
@@ -23,7 +23,7 @@ export async function GET() {
       6: "SABTU",
     };
 
-    const hariIni = hariMap[now.getDay()];
+    const hariIni = dayJakarta();
     const userId = session.user.id;
     const role = session.user.role;
 

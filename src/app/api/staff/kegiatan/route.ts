@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-
+import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
 export async function GET() {
   try {
     const session = await auth();
@@ -10,8 +10,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const tanggal = new Date();
-    tanggal.setHours(0, 0, 0, 0);
+    const tanggal = todayJakarta();
 
     const kegiatan = await prisma.kegiatanStaff.findMany({
       where: {
@@ -46,8 +45,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const tanggal = new Date();
-    tanggal.setHours(0, 0, 0, 0);
+    const tanggal = todayJakarta();
 
     const kegiatan = await prisma.kegiatanStaff.create({
       data: {
