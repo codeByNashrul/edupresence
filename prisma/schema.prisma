@@ -1,0 +1,230 @@
+// ============================================================
+// EDUPRESENCE — Prisma Schema
+// Database: PostgreSQL (Supabase - Fase 1)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// ENUM
+// ------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  PIMPINAN
+  GURU
+  STAFF
+}
+
+enum StatusAbsensi {
+  HADIR
+  TERLAMBAT
+  TIDAK_HADIR
+}
+
+enum TipeAbsensi {
+  BERANGKAT
+  JAM_MENGAJAR
+  PULANG
+}
+
+enum HariMinggu {
+  SENIN
+  SELASA
+  RABU
+  KAMIS
+  JUMAT
+  SABTU
+}
+
+// ------------------------------------------------------------
+// 1. USER
+// Semua user (admin, pimpinan, guru, staff) ada di sini.
+// Login menggunakan nip + password.
+// ------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  nama      String
+  nip       String   @unique
+  password  String // bcrypt hash
+  noWa      String? // format: 628xxxxxxxxxx
+  role      Role
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi
+  guru          Guru?
+  absensi       Absensi[]
+  kegiatanStaff KegiatanStaff[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------
+// 2. GURU
+// Data tambahan khusus guru (extend dari User).
+// ------------------------------------------------------------
+
+model Guru {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jadwal Jadwal[]
+
+  @@map("guru")
+}
+
+// ------------------------------------------------------------
+// 3. KELAS
+// Contoh: X-A, X-B, XI-A, XII-IPA-1, dst.
+// ------------------------------------------------------------
+
+model Kelas {
+  id        String   @id @default(cuid())
+  nama      String   @unique // contoh: "X-A"
+  tingkat   String // contoh: "X", "XI", "XII"
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Relasi
+  jadwal Jadwal[]
+
+  @@map("kelas")
+}
+
+// ------------------------------------------------------------
+// 4. MATA PELAJARAN
+// ------------------------------------------------------------
+
+model MataPelajaran {
+  id        String   @id @default(cuid())
+  nama      String   @unique // contoh: "Matematika"
+  kode      String   @unique // contoh: "MTK"
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Relasi
+  jadwal Jadwal[]
+
+  @@map("mata_pelajaran")
+}
+
+// ------------------------------------------------------------
+// 5. RUANGAN
+// Contoh: Ruang 1, Lab IPA, Lapangan, dst.
+// ------------------------------------------------------------
+
+model Ruangan {
+  id        String   @id @default(cuid())
+  nama      String   @unique // contoh: "Ruang 12"
+  kodeQr    String   @unique // token unik yang di-encode ke QR
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Relasi
+  jadwal  Jadwal[]
+  absensi Absensi[]
+
+  @@map("ruangan")
+}
+
+// ------------------------------------------------------------
+// 6. JADWAL
+// Jadwal tetap per semester.
+// Satu baris = satu slot mengajar (guru, kelas, mapel, ruangan, hari, jam).
+// ------------------------------------------------------------
+
+model Jadwal {
+  id              String     @id @default(cuid())
+  guruId          String
+  kelasId         String
+  mataPelajaranId String
+  ruanganId       String
+  hari            HariMinggu
+  jamMulai        String // format: "07:00"
+  jamSelesai      String // format: "08:30"
+  aktif           Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relasi
+  guru          Guru          @relation(fields: [guruId], references: [id])
+  kelas         Kelas         @relation(fields: [kelasId], references: [id])
+  mataPelajaran MataPelajaran @relation(fields: [mataPelajaranId], references: [id])
+  ruangan       Ruangan       @relation(fields: [ruanganId], references: [id])
+  absensi       Absensi[]
+
+  @@map("jadwal")
+}
+
+// ------------------------------------------------------------
+// 7. ABSENSI
+// Log setiap scan QR yang dilakukan.
+// Berlaku untuk guru (BERANGKAT, JAM_MENGAJAR, PULANG)
+// dan staff (BERANGKAT, PULANG).
+// ------------------------------------------------------------
+
+model Absensi {
+  id        String        @id @default(cuid())
+  userId    String
+  ruanganId String?
+  jadwalId  String?
+  tipe      TipeAbsensi
+  status    StatusAbsensi
+  waktuScan DateTime      @default(now())
+  tanggal   DateTime
+  createdAt DateTime      @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  ruangan Ruangan? @relation(fields: [ruanganId], references: [id])
+  jadwal  Jadwal?  @relation(fields: [jadwalId], references: [id])
+
+  @@map("absensi")
+}
+
+// ------------------------------------------------------------
+// 8. PENGATURAN SISTEM
+// Konfigurasi global seperti toleransi keterlambatan,
+// jam apel pagi/sore, template pesan WA, dll.
+// ------------------------------------------------------------
+
+model Pengaturan {
+  id                  String   @id @default(cuid())
+  toleransiMenit      Int      @default(15) // toleransi keterlambatan
+  jamBerangkatMulai   String   @default("06:00")
+  jamBerangkatSelesai String   @default("08:00")
+  jamPulangMulai      String   @default("13:00")
+  jamPulangSelesai    String   @default("16:00")
+  templatePesanWa     String   @default("Yth. Bpk/Ibu {nama},\nAnda terjadwal mengajar {mapel} kelas {kelas} pada jam {jam} hari ini.\nMohon konfirmasi kehadiran Anda.\nTerima kasih.")
+  updatedAt           DateTime @updatedAt
+
+  @@map("pengaturan")
+}
+
+model KegiatanStaff {
+  id         String   @id @default(cuid())
+  userId     String
+  tanggal    DateTime
+  jamMulai   String
+  jamSelesai String?
+  catatan    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("kegiatan_staff")
+}
