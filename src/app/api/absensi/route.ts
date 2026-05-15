@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
+import { nowJakarta, todayJakarta, timeJakarta } from "@/lib/time";
 
 export async function POST(req: Request) {
   try {

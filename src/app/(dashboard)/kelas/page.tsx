@@ -19,7 +19,8 @@ export default function KelasPage() {
   async function fetchKelas() {
     const res = await fetch("/api/kelas");
     const data = await res.json();
-    setKelas(data);
+    const [kelas, setKelas] = useState<Kelas[]>([]);
+    setKelas(Array.isArray(data) ? data : []);
     setLoading(false);
   }
 

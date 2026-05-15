@@ -1,5 +1,6 @@
 "use client";
 
+import { Edit, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface Staff {
@@ -91,14 +92,15 @@ export default function StaffPage() {
         </div>
         <button
           onClick={openTambah}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
         >
-          + Tambah Staff
+          <Plus size={18} />
+          <span>Tambah Staff</span>
         </button>
       </div>
 
       {/* Tabel */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400 dark:text-gray-500">
             Memuat data...
@@ -111,18 +113,12 @@ export default function StaffPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
-                  Nama
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
-                  NIP
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
+                <th className="text-left px-4 py-3 font-medium">Nama</th>
+                <th className="text-left px-4 py-3 font-medium">NIP</th>
+                <th className="text-left px-4 py-3 font-medium">
                   No. WhatsApp
                 </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
-                  Aksi
-                </th>
+                <th className="text-center px-4 py-3 font-medium">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -141,18 +137,20 @@ export default function StaffPage() {
                     {s.noWa ?? "-"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                    <div className="justify-center flex gap-2">
                       <button
                         onClick={() => openEdit(s)}
-                        className="text-indigo-600 hover:text-indigo-700 font-medium"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 text-xs font-semibold transition"
                       >
-                        Edit
+                        <Edit size={16} />
+                        <span>Edit</span>
                       </button>
                       <button
                         onClick={() => handleDelete(s.id)}
-                        className="text-red-500 hover:text-red-600 font-medium"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-200 text-red-600 hover:bg-red-100 text-xs font-semibold transition"
                       >
-                        Hapus
+                        <Trash2 size={16} />
+                        <span>Hapus</span>
                       </button>
                     </div>
                   </td>

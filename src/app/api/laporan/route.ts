@@ -116,7 +116,14 @@ export async function GET(req: Request) {
     } else {
       // Laporan mengajar
       const guru = await prisma.guru.findMany({
-        include: { user: true },
+        where: {
+          user: {
+            aktif: true,
+          },
+        },
+        include: {
+          user: true,
+        },
       });
 
       // Ambil semua absensi mengajar sekaligus — satu query

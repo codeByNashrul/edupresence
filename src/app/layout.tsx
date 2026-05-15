@@ -12,8 +12,8 @@ const plusJakarta = Plus_Jakarta_Sans({
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "EduPresence — Sistem Absensi Sekolah",
-  description: "Sistem absensi guru & staff berbasis QR Code",
+  title: "EduPresence — School Management System",
+  description: "School Management System untuk SMP POMOSDA",
 };
 
 export default function RootLayout({

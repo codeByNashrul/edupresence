@@ -1,5 +1,6 @@
 "use client";
 
+import { Pen, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface Guru {
@@ -98,7 +99,7 @@ export default function GuruPage() {
       </div>
 
       {/* Tabel */}
-      <div className="dark:bg-gray-800 rounded-xl border dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Memuat data...</div>
         ) : guru.length === 0 ? (
@@ -106,51 +107,49 @@ export default function GuruPage() {
             Belum ada data guru
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="dark:bg-gray-900 border-b dark:border-gray-700">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  Nama
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  NIP
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  No. WhatsApp
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  Aksi
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y dark:divide-gray-700">
-              {guru.map((g) => (
-                <tr key={g.id} className="hover:dark:bg-gray-900">
-                  <td className="px-4 py-3 font-medium dark:text-gray-100">
-                    {g.nama}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{g.nip}</td>
-                  <td className="px-4 py-3 text-gray-600">{g.noWa ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => openEdit(g)}
-                        className="text-indigo-600 hover:text-indigo-700 font-medium"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(g.id)}
-                        className="text-red-500 hover:text-red-600 font-medium"
-                      >
-                        Hapus
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium">Nama</th>
+                  <th className="text-left px-4 py-3 font-medium">NIP</th>
+                  <th className="text-left px-4 py-3 font-medium">
+                    No. WhatsApp
+                  </th>
+                  <th className="text-center px-4 py-3 font-medium">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {guru.map((g) => (
+                  <tr key={g.id} className="hover:dark:bg-gray-900">
+                    <td className="px-4 py-3 font-medium dark:text-gray-100">
+                      {g.nama}
+                    </td>
+                    <td className="px-4 py-3 ">{g.nip}</td>
+                    <td className="px-4 py-3 ">{g.noWa ?? "-"}</td>
+                    <td className="px-4 py-3">
+                      <div className="justify-center flex gap-2">
+                        <button
+                          onClick={() => openEdit(g)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 text-xs font-semibold transition"
+                        >
+                          <Pen size={16} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(g.id)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-200 text-red-600 hover:bg-red-100 text-xs font-semibold transition"
+                        >
+                          <Trash2 size={16} />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

@@ -324,7 +324,8 @@ export default function JadwalPage() {
                                 ) : j.guru.user.noWa ? (
                                   <a
                                     href={(() => {
-                                      const pesan = `Assalamualaikum ${j.guru.user.nama}, mohon segera melakukan scan absensi untuk jadwal ${j.mataPelajaran.nama} kelas ${j.kelas.nama} pukul ${j.jamMulai}–${j.jamSelesai}. Terima kasih.`;
+                                      const pesan = `Yth. Bapak/Ibu ${j.guru.user.nama}, anda terjadwal untuk mengajar ${j.mataPelajaran.nama} kelas ${j.kelas.nama} pada jam ${j.jamMulai}–${j.jamSelesai} di ruangan ${j.ruangan.nama} hari ${j.hari}.
+                                      Mohon konfirmasi kehadiran Anda, Terima kasih.`;
 
                                       return `https://wa.me/${j.guru.user.noWa}?text=${encodeURIComponent(
                                         pesan,

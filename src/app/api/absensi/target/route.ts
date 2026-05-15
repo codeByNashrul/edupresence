@@ -11,7 +11,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const now = nowJakarta();
     const tanggal = todayJakarta();
 
     const hariMap: Record<number, string> = {

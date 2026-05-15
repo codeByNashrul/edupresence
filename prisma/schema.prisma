@@ -65,6 +65,7 @@ model User {
   guru          Guru?
   absensi       Absensi[]
   kegiatanStaff KegiatanStaff[]
+  pengumuman    Pengumuman[]
 
   @@map("users")
 }
@@ -100,7 +101,9 @@ model Kelas {
   createdAt DateTime @default(now())
 
   // Relasi
-  jadwal Jadwal[]
+  jadwal       Jadwal[]
+  siswa        Siswa[]
+  absensiSiswa AbsensiSiswa[]
 
   @@map("kelas")
 }
@@ -227,4 +230,76 @@ model KegiatanStaff {
   user User @relation(fields: [userId], references: [id])
 
   @@map("kegiatan_staff")
+}
+
+model Pengumuman {
+  id        String   @id @default(cuid())
+  judul     String
+  isi       String
+  tanggal   DateTime @default(now())
+  aktif     Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pembuat User @relation(fields: [createdBy], references: [id])
+
+  @@map("pengumuman")
+}
+
+model Siswa {
+  id           String   @id @default(cuid())
+  nama         String
+  nis          String   @unique
+  jenisKelamin String
+  kelasId      String
+  kodeQr       String   @unique
+  aktif        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  kelas           Kelas                  @relation(fields: [kelasId], references: [id])
+  absensi         AbsensiSiswa[]
+  absensiKegiatan AbsensiKegiatanSiswa[]
+
+  @@map("siswa")
+}
+
+model AbsensiSiswa {
+  id        String        @id @default(cuid())
+  siswaId   String
+  kelasId   String
+  tanggal   DateTime
+  waktuScan DateTime      @default(now())
+  status    StatusAbsensi
+  createdAt DateTime      @default(now())
+
+  siswa Siswa @relation(fields: [siswaId], references: [id])
+  kelas Kelas @relation(fields: [kelasId], references: [id])
+
+  @@unique([siswaId, tanggal])
+  @@map("absensi_siswa")
+}
+
+model KegiatanSiswa {
+  id        String   @id @default(cuid())
+  nama      String
+  tanggal   DateTime
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  absensi AbsensiKegiatanSiswa[]
+}
+
+model AbsensiKegiatanSiswa {
+  id         String        @id @default(cuid())
+  siswaId    String
+  kegiatanId String
+  waktuScan  DateTime      @default(now())
+  status     StatusAbsensi
+
+  siswa    Siswa         @relation(fields: [siswaId], references: [id])
+  kegiatan KegiatanSiswa @relation(fields: [kegiatanId], references: [id])
+
+  @@unique([siswaId, kegiatanId])
 }

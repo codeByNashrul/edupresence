@@ -15,16 +15,24 @@ interface Props {
 
 export function DashboardShell({ children, role, user }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
       <Sidebar
         role={role}
         isOpen={sidebarOpen}
+        isCollapsed={sidebarCollapsed}
         onClose={() => setSidebarOpen(false)}
       />
+
       <div className="flex-1 flex flex-col min-w-0">
-        <Header user={user} onMenuClick={() => setSidebarOpen(true)} />
+        <Header
+          user={user}
+          onMenuClick={() => setSidebarOpen(true)}
+          onDesktopMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+
         <main className="flex-1 p-4 lg:p-6">{children}</main>
       </div>
     </div>
