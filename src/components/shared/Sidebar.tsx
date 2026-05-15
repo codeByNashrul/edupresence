@@ -67,13 +67,13 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
 
       <aside
         className={`
-        fixed top-0 left-0 h-full z-30 w-56 p-4
-        bg-white dark:bg-gray-900
-        border-r border-gray-200 dark:border-gray-700
-        transition-transform duration-300
-        ${isOpen ? "translate-x-0" : "-translate-x-full"}
-        lg:static lg:translate-x-0 lg:z-auto lg:min-h-screen
-      `}
+    fixed top-0 left-0 h-full z-30 w-56 p-4
+    bg-white dark:bg-gray-900
+    border-r border-gray-200 dark:border-gray-700
+    transition-transform duration-300
+    ${isOpen ? "translate-x-0" : "-translate-x-full"}
+    lg:sticky lg:top-0 lg:translate-x-0 lg:z-auto lg:h-screen
+  `}
       >
         {/* Logo & Nama Sekolah */}
         <div className="mb-8 flex items-center justify-between">
