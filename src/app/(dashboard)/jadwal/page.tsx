@@ -50,7 +50,10 @@ interface Ruangan {
 
 export default function JadwalPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const role = session?.user?.role ?? "";
+
+  const isAdmin = role === "ADMIN";
+  const canViewStatus = ["ADMIN", "PIMPINAN"].includes(role);
 
   const [jadwal, setJadwal] = useState<Jadwal[]>([]);
   const [guru, setGuru] = useState<Guru[]>([]);
@@ -103,7 +106,6 @@ export default function JadwalPage() {
 
   function openTambah() {
     if (!isAdmin) return;
-
     setEditData(null);
     setForm({
       guruId: "",
@@ -120,7 +122,6 @@ export default function JadwalPage() {
 
   function openEdit(j: Jadwal) {
     if (!isAdmin) return;
-
     setEditData(j);
     setForm({
       guruId: j.guru.id,
@@ -138,7 +139,6 @@ export default function JadwalPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isAdmin) return;
-
     setError("");
 
     const method = editData ? "PUT" : "POST";
@@ -163,7 +163,6 @@ export default function JadwalPage() {
   async function handleDelete(id: string) {
     if (!isAdmin) return;
     if (!confirm("Yakin ingin menghapus jadwal ini?")) return;
-
     await fetch(`/api/jadwal/${id}`, { method: "DELETE" });
     fetchAll();
   }
@@ -173,11 +172,7 @@ export default function JadwalPage() {
   const jadwalPerKelas = jadwalHariIni.reduce(
     (acc, item) => {
       const namaKelas = item.kelas.nama;
-
-      if (!acc[namaKelas]) {
-        acc[namaKelas] = [];
-      }
-
+      if (!acc[namaKelas]) acc[namaKelas] = [];
       acc[namaKelas].push(item);
       return acc;
     },
@@ -189,10 +184,12 @@ export default function JadwalPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {isAdmin ? "Jadwal Pelajaran" : "Jadwal Mata Pelajaran"}
+            {canViewStatus ? "Jadwal Pelajaran" : "Jadwal Mata Pelajaran"}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            {isAdmin ? "Jadwal tetap per semester" : "Daftar jadwal mengajar"}
+            {canViewStatus
+              ? "Jadwal tetap per semester"
+              : "Daftar jadwal mengajar"}
           </p>
         </div>
 
@@ -251,25 +248,24 @@ export default function JadwalPage() {
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">
                           Jam
                         </th>
-
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">
                           Mata Pelajaran
                         </th>
-
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">
                           Guru
                         </th>
-
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">
                           Ruangan
                         </th>
 
-                        {isAdmin && (
+                        {/* Kolom status — tampil untuk ADMIN & PIMPINAN */}
+                        {canViewStatus && (
                           <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">
                             Status
                           </th>
                         )}
 
+                        {/* Kolom aksi — hanya ADMIN */}
                         {isAdmin && (
                           <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">
                             Aksi
@@ -290,12 +286,8 @@ export default function JadwalPage() {
                               {j.jamMulai} – {j.jamSelesai}
                             </td>
 
-                            <td className="px-4 py-3">
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-gray-100">
-                                  {j.mataPelajaran.nama}
-                                </p>
-                              </div>
+                            <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
+                              {j.mataPelajaran.nama}
                             </td>
 
                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
@@ -306,20 +298,20 @@ export default function JadwalPage() {
                               {j.ruangan.nama}
                             </td>
 
-                            {isAdmin && (
+                            {/* Status — ADMIN & PIMPINAN */}
+                            {canViewStatus && (
                               <td className="px-4 py-3">
                                 {j.absensiHariIni ? (
                                   <div>
                                     <span
                                       className={`text-xs font-medium px-2 py-1 rounded-full ${
                                         j.absensiHariIni.status === "HADIR"
-                                          ? "bg-green-50 text-green-600"
-                                          : "bg-amber-50 text-amber-600"
+                                          ? "bg-green-50 dark:bg-green-900 text-green-600 dark:text-green-300"
+                                          : "bg-amber-50 dark:bg-amber-900 text-amber-600 dark:text-amber-300"
                                       }`}
                                     >
                                       {j.absensiHariIni.status}
                                     </span>
-
                                     <p className="text-xs text-gray-400 mt-1">
                                       {new Date(
                                         j.absensiHariIni.waktuScan,
@@ -331,9 +323,13 @@ export default function JadwalPage() {
                                   </div>
                                 ) : j.guru.user.noWa ? (
                                   <a
-                                    href={`https://wa.me/${j.guru.user.noWa}?text=${encodeURIComponent(
-                                      `Assalamu'alaikum ${j.guru.user.nama}, mohon segera melakukan scan absensi untuk jadwal ${j.mataPelajaran.nama} kelas ${j.kelas.nama} pukul ${j.jamMulai}–${j.jamSelesai}. Terima kasih.`,
-                                    )}`}
+                                    href={(() => {
+                                      const pesan = `Assalamualaikum ${j.guru.user.nama}, mohon segera melakukan scan absensi untuk jadwal ${j.mataPelajaran.nama} kelas ${j.kelas.nama} pukul ${j.jamMulai}–${j.jamSelesai}. Terima kasih.`;
+
+                                      return `https://wa.me/${j.guru.user.noWa}?text=${encodeURIComponent(
+                                        pesan,
+                                      )}`;
+                                    })()}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs font-medium px-3 py-1 rounded-full bg-green-50 text-green-600 hover:bg-green-100"
@@ -342,12 +338,13 @@ export default function JadwalPage() {
                                   </a>
                                 ) : (
                                   <span className="text-xs text-gray-400">
-                                    No WA kosong
+                                    Belum scan
                                   </span>
                                 )}
                               </td>
                             )}
 
+                            {/* Aksi — hanya ADMIN */}
                             {isAdmin && (
                               <td className="px-4 py-3">
                                 <div className="flex gap-2">
@@ -357,7 +354,6 @@ export default function JadwalPage() {
                                   >
                                     Edit
                                   </button>
-
                                   <button
                                     onClick={() => handleDelete(j.id)}
                                     className="text-red-500 hover:text-red-600 font-medium"
@@ -379,7 +375,7 @@ export default function JadwalPage() {
 
       {isAdmin && showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
               {editData ? "Edit Jadwal" : "Tambah Jadwal"}
             </h2>
@@ -418,7 +414,6 @@ export default function JadwalPage() {
                     required
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Jam Selesai
@@ -527,7 +522,6 @@ export default function JadwalPage() {
                 >
                   Batal
                 </button>
-
                 <button
                   type="submit"
                   className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
