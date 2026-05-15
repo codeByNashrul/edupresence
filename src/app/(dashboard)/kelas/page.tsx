@@ -29,14 +29,14 @@ export default function KelasPage() {
 
   function openTambah() {
     setEditData(null);
-    setForm({ nama: "", tingkat: "" });
+    setForm({ nama: "" });
     setError("");
     setShowForm(true);
   }
 
   function openEdit(k: Kelas) {
     setEditData(k);
-    setForm({ nama: k.nama }); // hapus tingkat
+    setForm({ nama: k.nama });
     setError("");
     setShowForm(true);
   }
@@ -74,10 +74,10 @@ export default function KelasPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold dark:text-gray-100">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             Manajemen Kelas
           </h1>
-          <p className="dark:text-gray-400 text-sm mt-1">
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             Kelola data kelas sekolah
           </p>
         </div>
@@ -89,35 +89,42 @@ export default function KelasPage() {
         </button>
       </div>
 
-      <div className="dark:bg-gray-800 rounded-xl border dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Memuat data...</div>
+          <div className="p-8 text-center text-gray-400 dark:text-gray-500">
+            Memuat data...
+          </div>
         ) : kelas.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
+          <div className="p-8 text-center text-gray-400 dark:text-gray-500">
             Belum ada data kelas
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="dark:bg-gray-900 border-b dark:border-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
                   Nama Kelas
                 </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
                   Tingkat
                 </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
                   Aksi
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y dark:divide-gray-700">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {kelas.map((k) => (
-                <tr key={k.id} className="dark:hover:bg-gray-700">
-                  <td className="px-4 py-3 font-medium dark:text-gray-100">
+                <tr
+                  key={k.id}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
                     {k.nama}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{k.tingkat}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                    {k.tingkat}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
                       <button
@@ -143,46 +150,27 @@ export default function KelasPage() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold dark:text-gray-100 mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
               {editData ? "Edit Kelas" : "Tambah Kelas"}
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Nama Kelas
                 </label>
                 <input
                   type="text"
                   value={form.nama}
                   onChange={(e) => setForm({ nama: e.target.value })}
-                  placeholder="contoh: X-A, XI-B, XII-IPA-1"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="contoh: VII-A, VIII-B, IX-C"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Tingkat akan terdeteksi otomatis dari nama kelas
+                  Tingkat akan terdeteksi otomatis (VII, VIII, IX)
                 </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tingkat
-                </label>
-                <select
-                  value={form.tingkat}
-                  onChange={(e) =>
-                    setForm({ ...form, tingkat: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                >
-                  <option value="">Pilih tingkat</option>
-                  <option value="X">X</option>
-                  <option value="XI">XI</option>
-                  <option value="XII">XII</option>
-                </select>
               </div>
 
               {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -191,7 +179,7 @@ export default function KelasPage() {
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium dark:hover:bg-gray-700"
+                  className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Batal
                 </button>

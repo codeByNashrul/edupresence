@@ -146,7 +146,7 @@ export async function POST(req: Request) {
           guruId: guruData.id,
           hari: hariIni as any,
           aktif: true,
-          ruanganId,
+          ruanganId: ruanganId ?? undefined,
           jamMulai: { lte: jamSekarang },
           jamSelesai: { gte: jamSekarang },
         },
