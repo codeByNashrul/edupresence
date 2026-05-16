@@ -17,6 +17,7 @@ import {
   GraduationCap,
   ClipboardList,
   FileBarChart2,
+  NotebookPen,
 } from "lucide-react";
 
 const menuAdmin = [
@@ -39,6 +40,7 @@ const menuPimpinan = [
   { label: "Jadwal Mata Pelajaran", href: "/jadwal" },
   { label: "Laporan Absensi", href: "/laporan" },
   { label: "Laporan Kegiatan Siswa", href: "/laporan-kegiatan-siswa" },
+  { label: "Catatan Harian Staff", href: "/catatan-harian/monitor" },
 ];
 
 const menuGuru = [
@@ -52,6 +54,7 @@ const menuGuru = [
 const menuStaff = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Scan Absensi", href: "/scan" },
+  { label: "Catatan Harian", href: "/catatan-harian" },
   { label: "Riwayat", href: "/riwayat" },
   { label: "Laporan Kegiatan Siswa", href: "/laporan-kegiatan-siswa" },
 ];
@@ -77,6 +80,8 @@ const iconMap: Record<string, any> = {
   "/siswa": GraduationCap,
   "/kegiatan-siswa": ClipboardList,
   "/laporan-kegiatan-siswa": FileBarChart2,
+  "/catatan-harian": NotebookPen,
+  "/catatan-harian/monitor": NotebookPen,
 };
 interface SidebarProps {
   role: string;

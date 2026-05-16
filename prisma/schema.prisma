@@ -66,6 +66,7 @@ model User {
   absensi       Absensi[]
   kegiatanStaff KegiatanStaff[]
   pengumuman    Pengumuman[]
+  catatanHarian CatatanHarian[]
 
   @@map("users")
 }
@@ -302,4 +303,22 @@ model AbsensiKegiatanSiswa {
   kegiatan KegiatanSiswa @relation(fields: [kegiatanId], references: [id])
 
   @@unique([siswaId, kegiatanId])
+}
+
+model CatatanHarian {
+  id       String   @id @default(cuid())
+  userId   String
+  tanggal  DateTime
+  kegiatan String   @db.Text
+  hasil    String   @db.Text
+  kendala  String?  @db.Text
+  foto     String[] // array URL foto dari Supabase Storage
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, tanggal]) // satu catatan per staff per hari
+  @@map("catatan_harian")
 }
