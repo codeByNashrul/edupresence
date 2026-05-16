@@ -1,32 +1,56 @@
 export function nowJakarta() {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }),
-  );
+  return new Date();
 }
 
 export function todayJakarta() {
-  const tanggal = nowJakarta();
+  const now = new Date();
+
+  const tanggal = new Date(
+    now.toLocaleDateString("sv-SE", {
+      timeZone: "Asia/Jakarta",
+    }),
+  );
+
   tanggal.setHours(0, 0, 0, 0);
   return tanggal;
 }
 
 export function timeJakarta() {
-  const now = nowJakarta();
+  const now = new Date();
 
-  return `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes(),
-  ).padStart(2, "0")}`;
+  return now.toLocaleTimeString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export function dayJakarta() {
-  const hariMap: Record<number, string> = {
-    1: "SENIN",
-    2: "SELASA",
-    3: "RABU",
-    4: "KAMIS",
-    5: "JUMAT",
-    6: "SABTU",
+  const now = new Date();
+
+  const day = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jakarta",
+      weekday: "short",
+    })
+      .formatToParts(now)
+      .find((part) => part.type === "weekday")?.value,
+  );
+
+  const hariMap: Record<string, string> = {
+    Mon: "SENIN",
+    Tue: "SELASA",
+    Wed: "RABU",
+    Thu: "KAMIS",
+    Fri: "JUMAT",
+    Sat: "SABTU",
   };
 
-  return hariMap[nowJakarta().getDay()];
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    weekday: "short",
+  }).format(now);
+
+  return hariMap[weekday];
 }

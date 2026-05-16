@@ -55,20 +55,20 @@ export async function GET(req: Request) {
     });
 
     const guruHadir = absensiHariIni.filter(
-      (a) => a.user.role === "GURU" && a.status === "HADIR",
+      (a) =>
+        a.user.role === "GURU" &&
+        (a.status === "HADIR" || a.status === "TERLAMBAT"),
     ).length;
 
-    const guruTerlambat = absensiHariIni.filter(
-      (a) => a.user.role === "GURU" && a.status === "TERLAMBAT",
-    ).length;
+    const guruTerlambat = 0;
 
     const staffHadir = absensiHariIni.filter(
-      (a) => a.user.role === "STAFF" && a.status === "HADIR",
+      (a) =>
+        a.user.role === "STAFF" &&
+        (a.status === "HADIR" || a.status === "TERLAMBAT"),
     ).length;
 
-    const staffTerlambat = absensiHariIni.filter(
-      (a) => a.user.role === "STAFF" && a.status === "TERLAMBAT",
-    ).length;
+    const staffTerlambat = 0;
 
     const jadwalHariIni = hariIni
       ? await prisma.jadwal.findMany({
@@ -118,10 +118,10 @@ export async function GET(req: Request) {
       totalStaff,
       guruHadir,
       guruTerlambat,
-      guruTidakHadir: totalGuru - guruHadir - guruTerlambat,
+      guruTidakHadir: totalGuru - guruHadir,
       staffHadir,
       staffTerlambat,
-      staffTidakHadir: totalStaff - staffHadir - staffTerlambat,
+      staffTidakHadir: totalStaff - staffHadir,
       jadwal: jadwalDenganStatus,
     });
   } catch (error) {

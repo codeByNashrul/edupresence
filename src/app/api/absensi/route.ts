@@ -74,16 +74,14 @@ export async function POST(req: Request) {
     let jadwalId: string | null = null;
 
     if (tipe === "BERANGKAT") {
-      const [jamB, menitB] = (pengaturan?.jamBerangkatMulai ?? "06:00")
+      const [jamB, menitB] = (pengaturan?.jamBerangkatSelesai ?? "10:00")
         .split(":")
         .map(Number);
 
-      const jadwalBerangkat = new Date(now);
-      jadwalBerangkat.setHours(jamB, menitB, 0, 0);
+      const batasBerangkat = new Date(now);
+      batasBerangkat.setHours(jamB, menitB, 0, 0);
 
-      const selisih = (now.getTime() - jadwalBerangkat.getTime()) / 60000;
-
-      if (selisih > toleransi) {
+      if (now.getTime() > batasBerangkat.getTime()) {
         status = "TERLAMBAT";
       }
     }
@@ -203,7 +201,11 @@ export async function POST(req: Request) {
       id: absensi.id,
       tipe,
       status,
-      waktu: now.toLocaleTimeString("id-ID"),
+      waktu: now.toLocaleTimeString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       ruangan: ruanganNama,
     });
   } catch (error) {
