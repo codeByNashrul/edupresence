@@ -89,14 +89,22 @@ async function main() {
 
   // 6. Pengaturan default
   const count = await prisma.pengaturan.count();
+
   if (count === 0) {
     await prisma.pengaturan.create({
       data: {
-        toleransiMenit: 15,
-        jamBerangkatMulai: "06:00",
-        jamBerangkatSelesai: "08:00",
+        // Kehadiran harian
+        jamBerangkatMulai: "07:00",
+        jamBerangkatHadirSelesai: "10:00",
+        jamBerangkatSelesai: "12:00",
+
+        // Jam mengajar
+        toleransiMengajarMenit: 30,
+
+        // Kepulangan
         jamPulangMulai: "13:00",
         jamPulangSelesai: "16:00",
+
         templatePesanWa:
           "Yth. Bpk/Ibu {nama},\n\nAnda terjadwal mengajar *{mapel}* kelas *{kelas}* pada jam *{jam}* hari ini ({tanggal}).\n\nMohon konfirmasi kehadiran Anda.\n\nTerima kasih.\n_EduPresence_",
       },

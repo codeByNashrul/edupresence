@@ -1,7 +1,15 @@
 "use client";
 
-import { Download, Pencil, Plus, QrCode, Trash2, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Download,
+  Pencil,
+  Plus,
+  QrCode,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import QRCode from "react-qr-code";
 
 interface Kelas {
@@ -21,16 +29,17 @@ interface Siswa {
 export default function SiswaPage() {
   const [siswa, setSiswa] = useState<Siswa[]>([]);
   const [kelas, setKelas] = useState<Kelas[]>([]);
-
   const [loading, setLoading] = useState(true);
-
   const [showForm, setShowForm] = useState(false);
   const [showQr, setShowQr] = useState(false);
-
   const [selectedQr, setSelectedQr] = useState("");
   const [selectedNama, setSelectedNama] = useState("");
-
   const [editId, setEditId] = useState<string | null>(null);
+
+  // Filter & Search
+  const [search, setSearch] = useState("");
+  const [filterKelas, setFilterKelas] = useState("");
+  const [filterJK, setFilterJK] = useState("");
 
   const [form, setForm] = useState({
     nama: "",
@@ -42,15 +51,12 @@ export default function SiswaPage() {
   async function fetchData() {
     try {
       setLoading(true);
-
       const [siswaRes, kelasRes] = await Promise.all([
         fetch("/api/siswa"),
         fetch("/api/kelas"),
       ]);
-
       const siswaData = await siswaRes.json();
       const kelasData = await kelasRes.json();
-
       setSiswa(Array.isArray(siswaData) ? siswaData : []);
       setKelas(Array.isArray(kelasData) ? kelasData : []);
     } catch (error) {
@@ -60,80 +66,71 @@ export default function SiswaPage() {
     }
   }
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Filter siswa
+  const siswaFiltered = useMemo(() => {
+    return siswa.filter((s) => {
+      const matchSearch =
+        search === "" ||
+        s.nama.toLowerCase().includes(search.toLowerCase()) ||
+        s.nis.includes(search);
+
+      const matchKelas = filterKelas === "" || s.kelas.id === filterKelas;
+      const matchJK = filterJK === "" || s.jenisKelamin === filterJK;
+
+      return matchSearch && matchKelas && matchJK;
+    });
+  }, [siswa, search, filterKelas, filterJK]);
+
   async function handleImportCsv(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const text = await file.text();
-
     const res = await fetch("/api/siswa/import", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ csv: text }),
     });
-
     const data = await res.json();
-
     if (!res.ok) {
       alert(data.error ?? "Gagal import CSV");
       return;
     }
-
     alert(`Import selesai.\nBerhasil: ${data.berhasil}\nGagal: ${data.gagal}`);
-
     fetchData();
-
     e.target.value = "";
   }
 
   async function handleDeleteAll() {
     if (!confirm("Yakin ingin menonaktifkan semua data siswa?")) return;
     if (!confirm("Tindakan ini akan menyembunyikan semua siswa aktif.")) return;
-
-    await fetch("/api/siswa/delete-all", {
-      method: "DELETE",
-    });
-
+    await fetch("/api/siswa/delete-all", { method: "DELETE" });
     fetchData();
   }
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   function openTambah() {
     setEditId(null);
-
-    setForm({
-      nama: "",
-      nis: "",
-      jenisKelamin: "",
-      kelasId: "",
-    });
-
+    setForm({ nama: "", nis: "", jenisKelamin: "", kelasId: "" });
     setShowForm(true);
   }
 
   function openEdit(data: Siswa) {
     setEditId(data.id);
-
     setForm({
       nama: data.nama,
       nis: data.nis,
       jenisKelamin: data.jenisKelamin,
       kelasId: data.kelas.id,
     });
-
     setShowForm(true);
   }
 
   function exportSiswaCsv() {
     if (siswa.length === 0) return;
-
     const headers = ["Nama", "NIS", "Jenis Kelamin", "Kelas", "Kode QR"];
-
     const rows = siswa.map((s) => [
       s.nama,
       s.nis,
@@ -141,55 +138,38 @@ export default function SiswaPage() {
       s.kelas.nama,
       s.kodeQr,
     ]);
-
     const csvContent = [headers, ...rows]
       .map((row) => row.join(";"))
       .join("\n");
-
     const blob = new Blob(["\uFEFF" + csvContent], {
       type: "text/csv;charset=utf-8;",
     });
-
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-
     link.href = url;
     link.download = "data-siswa.csv";
-
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     URL.revokeObjectURL(url);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
     const method = editId ? "PUT" : "POST";
-
     const url = editId ? `/api/siswa/${editId}` : "/api/siswa";
-
     await fetch(url, {
       method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
-
     setShowForm(false);
-
     fetchData();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Nonaktifkan siswa ini?")) return;
-
-    await fetch(`/api/siswa/${id}`, {
-      method: "DELETE",
-    });
-
+    await fetch(`/api/siswa/${id}`, { method: "DELETE" });
     fetchData();
   }
 
@@ -201,18 +181,17 @@ export default function SiswaPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             Data Siswa
           </h1>
-
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Manajemen siswa & QR absensi
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleDeleteAll}
             disabled={siswa.length === 0}
@@ -222,9 +201,7 @@ export default function SiswaPage() {
             <span>Hapus Semua</span>
           </button>
           <label className="flex items-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer">
-            <span>
-              <Upload size={16} />
-            </span>
+            <Upload size={16} />
             <span>Import CSV</span>
             <input
               type="file"
@@ -241,7 +218,6 @@ export default function SiswaPage() {
             <Download size={16} />
             <span>Export CSV</span>
           </button>
-
           <button
             onClick={openTambah}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
@@ -252,45 +228,116 @@ export default function SiswaPage() {
         </div>
       </div>
 
+      {/* Search & Filter */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4 flex gap-3 flex-wrap items-center">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari nama atau NIS..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Filter Kelas */}
+        <select
+          value={filterKelas}
+          onChange={(e) => setFilterKelas(e.target.value)}
+          className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Semua Kelas</option>
+          {kelas.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.nama}
+            </option>
+          ))}
+        </select>
+
+        {/* Filter Jenis Kelamin */}
+        <select
+          value={filterJK}
+          onChange={(e) => setFilterJK(e.target.value)}
+          className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">Semua JK</option>
+          <option value="L">Laki-laki</option>
+          <option value="P">Perempuan</option>
+        </select>
+
+        {/* Info hasil filter */}
+        <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+          {siswaFiltered.length} dari {siswa.length} siswa
+        </p>
+
+        {/* Reset filter */}
+        {(search || filterKelas || filterJK) && (
+          <button
+            onClick={() => {
+              setSearch("");
+              setFilterKelas("");
+              setFilterJK("");
+            }}
+            className="text-sm text-red-500 hover:text-red-600 font-medium whitespace-nowrap"
+          >
+            Reset filter
+          </button>
+        )}
+      </div>
+
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Memuat data...</div>
-        ) : siswa.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Belum ada siswa</div>
+        ) : siswaFiltered.length === 0 ? (
+          <div className="p-8 text-center text-gray-400">
+            {siswa.length === 0
+              ? "Belum ada siswa"
+              : "Tidak ada siswa yang sesuai filter"}
+          </div>
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-3 text-left">Nama</th>
-                  <th className="px-4 py-3 text-left">NIS</th>
-                  <th className="px-4 py-3 text-left">JK</th>
-                  <th className="px-4 py-3 text-left">Kelas</th>
-                  <th className="px-4 py-3 text-center">Aksi</th>
+                  <th className="px-4 py-3 text-left text-gray-600 dark:text-gray-300">
+                    Nama
+                  </th>
+                  <th className="px-4 py-3 text-left text-gray-600 dark:text-gray-300">
+                    NIS
+                  </th>
+                  <th className="px-4 py-3 text-left text-gray-600 dark:text-gray-300">
+                    JK
+                  </th>
+                  <th className="px-4 py-3 text-left text-gray-600 dark:text-gray-300">
+                    Kelas
+                  </th>
+                  <th className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">
+                    Aksi
+                  </th>
                 </tr>
               </thead>
-
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {siswa.map((s) => (
+                {siswaFiltered.map((s) => (
                   <tr
                     key={s.id}
-                    className="group hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
                   >
                     <td className="px-4 py-4">
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">
-                          {s.nama}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          NIS: {s.nis}
-                        </p>
-                      </div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">
+                        {s.nama}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        NIS: {s.nis}
+                      </p>
                     </td>
-
                     <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
                       {s.nis}
                     </td>
-
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -302,13 +349,11 @@ export default function SiswaPage() {
                         {s.jenisKelamin === "L" ? "Laki-laki" : "Perempuan"}
                       </span>
                     </td>
-
                     <td className="px-4 py-4">
                       <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600">
                         {s.kelas.nama}
                       </span>
                     </td>
-
                     <td className="px-4 py-4">
                       <div className="flex justify-center gap-2">
                         <button
@@ -318,7 +363,6 @@ export default function SiswaPage() {
                           <QrCode size={16} />
                           <span>QR</span>
                         </button>
-
                         <button
                           onClick={() => openEdit(s)}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 text-xs font-semibold transition"
@@ -326,10 +370,9 @@ export default function SiswaPage() {
                           <Pencil size={16} />
                           <span>Edit</span>
                         </button>
-
                         <button
                           onClick={() => handleDelete(s.id)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-200 text-red-600 hover:bg-red-100 text-xs font-semibold transition"
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition"
                         >
                           <Trash2 size={16} />
                           <span>Hapus</span>
@@ -348,83 +391,58 @@ export default function SiswaPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl p-6">
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
               {editId ? "Edit Siswa" : "Tambah Siswa"}
             </h2>
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <input
                 value={form.nama}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    nama: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, nama: e.target.value })}
                 placeholder="Nama siswa"
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
                 required
               />
-
               <input
                 value={form.nis}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    nis: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, nis: e.target.value })}
                 placeholder="NIS"
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
                 required
               />
-
               <select
                 value={form.jenisKelamin}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    jenisKelamin: e.target.value,
-                  })
+                  setForm({ ...form, jenisKelamin: e.target.value })
                 }
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
               >
                 <option value="L">Laki-laki</option>
                 <option value="P">Perempuan</option>
               </select>
-
               <select
                 value={form.kelasId}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    kelasId: e.target.value,
-                  })
-                }
-                className="w-full border rounded-lg px-3 py-2"
+                onChange={(e) => setForm({ ...form, kelasId: e.target.value })}
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
                 required
               >
                 <option value="">Pilih kelas</option>
-
                 {kelas.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.nama}
                   </option>
                 ))}
               </select>
-
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-4 py-2 rounded-lg border"
+                  className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm"
                 >
                   Batal
                 </button>
-
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white"
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
                 >
                   Simpan
                 </button>
@@ -439,16 +457,13 @@ export default function SiswaPage() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-2xl p-6 text-center">
             <h2 className="text-xl font-bold mb-1">QR Siswa</h2>
-
             <p className="text-gray-500 text-sm mb-6">{selectedNama}</p>
-
             <div className="bg-white p-4 rounded-xl inline-block">
               <QRCode value={selectedQr} size={220} />
             </div>
-
             <button
               onClick={() => setShowQr(false)}
-              className="mt-6 w-full bg-indigo-600 text-white py-2 rounded-lg"
+              className="mt-6 w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700"
             >
               Tutup
             </button>

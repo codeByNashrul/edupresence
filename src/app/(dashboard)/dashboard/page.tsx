@@ -13,7 +13,39 @@ import {
   Bar,
   XAxis,
   YAxis,
+  Legend,
+  CartesianGrid,
 } from "recharts";
+import {
+  Users,
+  UserCheck,
+  GraduationCap,
+  School,
+  Briefcase,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Megaphone,
+  Clock,
+  MapPin,
+  BookOpen,
+  ScanLine,
+  NotebookPen,
+  Sun,
+  Sunset,
+  TrendingUp,
+  CheckCircle2,
+  AlertCircle,
+  CircleDashed,
+  ArrowRight,
+  Activity,
+} from "lucide-react";
+import { GuruDashboardBody } from "@/components/dashboard/GuruDashboardBody";
+import { PelanggaranDashboardSection } from "@/components/dashboard/PelanggaranDashboardSection";
+import {
+  UpcomingEventsSidebar,
+  UpcomingEventsInline,
+} from "@/components/dashboard/UpcomingEventsWidget";
 
 interface JadwalItem {
   id: string;
@@ -32,12 +64,16 @@ interface JadwalItem {
 interface DashboardData {
   totalGuru: number;
   totalStaff: number;
+  totalSiswa: number;
   guruHadir: number;
   guruTerlambat: number;
   guruTidakHadir: number;
   staffHadir: number;
   staffTerlambat: number;
   staffTidakHadir: number;
+  siswaHadir: number;
+  siswaTerlambat: number;
+  siswaTidakHadir: number;
   jadwal: JadwalItem[];
 }
 
@@ -50,6 +86,7 @@ interface PengumumanItem {
 }
 
 interface TargetAbsensi {
+  jadwalId?: string;
   tipe: string;
   label: string;
   detail: string;
@@ -67,7 +104,15 @@ interface CatatanHarian {
   foto: string[];
 }
 
-const COLORS = ["#4f46e5", "#f59e0b"];
+const CHART_COLORS = {
+  guru: "#6366f1",
+  staff: "#8b5cf6",
+  hadir: "#22c55e",
+  terlambat: "#f59e0b",
+  belum: "#cbd5e1",
+};
+
+const PIE_COLORS = ["#6366f1", "#a78bfa", "#f43f5e"];
 
 function buildCalendar(year: number, month: number) {
   const firstDay = new Date(year, month, 1);
@@ -82,6 +127,239 @@ function buildCalendar(year: number, month: number) {
 function formatDate(date: Date) {
   return date.toISOString().split("T")[0];
 }
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 11) return "Selamat pagi";
+  if (hour < 15) return "Selamat siang";
+  if (hour < 18) return "Selamat sore";
+  return "Selamat malam";
+}
+
+function formatTanggalPanjang(iso: string) {
+  return new Date(iso + "T12:00:00").toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function pct(hadir: number, total: number) {
+  if (total === 0) return 0;
+  return Math.round((hadir / total) * 100);
+}
+
+// ─── Stat Card (sama seperti admin) ───────────────────────────────────────────
+function StatCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  gradient,
+  accent,
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  icon: React.ElementType;
+  gradient: string;
+  accent: string;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient}`}
+    >
+      <div className="absolute -right-3 -top-3 opacity-20">
+        <Icon size={72} strokeWidth={1.5} />
+      </div>
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="p-2 rounded-xl bg-white/20 backdrop-blur-sm">
+            <Icon size={18} />
+          </span>
+          <p className="text-sm font-medium text-white/90">{label}</p>
+        </div>
+        <p className="text-3xl font-bold tracking-tight">{value}</p>
+        {sub && <p className={`text-xs mt-1.5 font-medium ${accent}`}>{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Progress Ring ─────────────────────────────────────────────────────────────
+function ProgressRing({
+  label,
+  value,
+  total,
+  color,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+}) {
+  const percent = pct(value, total);
+  const circumference = 2 * Math.PI * 36;
+  const offset = circumference - (percent / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative w-24 h-24">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
+          <circle
+            cx="40"
+            cy="40"
+            r="36"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="6"
+            className="text-gray-100 dark:text-gray-700"
+          />
+          <circle
+            cx="40"
+            cy="40"
+            r="36"
+            fill="none"
+            stroke={color}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl font-bold text-gray-900 dark:text-gray-100">
+            {percent}%
+          </span>
+        </div>
+      </div>
+      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mt-2">
+        {label}
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        {value} / {total} hadir
+      </p>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6">
+      <div className="h-28 rounded-2xl bg-gray-200 dark:bg-gray-800" />
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div
+            key={i}
+            className="h-28 rounded-2xl bg-gray-200 dark:bg-gray-800"
+          />
+        ))}
+      </div>
+      <div className="grid lg:grid-cols-3 gap-4">
+        <div className="h-72 rounded-2xl bg-gray-200 dark:bg-gray-800 lg:col-span-1" />
+        <div className="h-72 rounded-2xl bg-gray-200 dark:bg-gray-800 lg:col-span-2" />
+      </div>
+    </div>
+  );
+}
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { name: string; value: number; color: string }[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 shadow-lg text-sm">
+      <p className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+        {label}
+      </p>
+      {payload.map((entry) => (
+        <p key={entry.name} className="text-gray-600 dark:text-gray-300">
+          <span
+            className="inline-block w-2 h-2 rounded-full mr-2"
+            style={{ backgroundColor: entry.color }}
+          />
+          {entry.name}: <strong>{entry.value}</strong>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const config: Record<
+    string,
+    {
+      label: string;
+      className: string;
+      icon: React.ElementType;
+    }
+  > = {
+    HADIR: {
+      label: "Hadir",
+      className:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400",
+      icon: CheckCircle2,
+    },
+
+    TERLAMBAT: {
+      label: "Terlambat",
+      className:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400",
+      icon: AlertCircle,
+    },
+
+    IZIN: {
+      label: "Izin",
+      className:
+        "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400",
+      icon: AlertCircle,
+    },
+
+    SAKIT: {
+      label: "Sakit",
+      className:
+        "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-400",
+      icon: AlertCircle,
+    },
+
+    ALPHA: {
+      label: "Alpha",
+      className: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400",
+      icon: AlertCircle,
+    },
+
+    BELUM: {
+      label: "Belum Absen",
+      className:
+        "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+      icon: CircleDashed,
+    },
+  };
+
+  const c = config[status] ?? config.BELUM;
+  const Icon = c.icon;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${c.className}`}
+    >
+      <Icon size={13} />
+      {c.label}
+    </span>
+  );
+}
+
+// Ganti seluruh fungsi CalendarPanel dengan ini
+// Tambahkan import UpcomingEventsSidebar dari UpcomingEventsWidget
+// dan pastikan import { useEffect } sudah ada di bagian atas file
 
 function CalendarPanel({
   selectedDate,
@@ -102,22 +380,93 @@ function CalendarPanel({
   >;
   simpanPengumuman: () => void;
 }) {
-  const current = new Date(selectedDate);
-  const year = current.getFullYear();
-  const month = current.getMonth();
-  const days = useMemo(() => buildCalendar(year, month), [year, month]);
-  const monthLabel = current.toLocaleDateString("id-ID", {
-    month: "long",
-    year: "numeric",
-  });
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  const [kalenderEvents, setKalenderEvents] = useState<
+    { tanggalMulai: string; tanggalSelesai: string; tipe: string }[]
+  >([]);
+
+  const days = useMemo(
+    () => buildCalendar(viewYear, viewMonth),
+    [viewYear, viewMonth],
+  );
+
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString(
+    "id-ID",
+    { month: "long", year: "numeric" },
+  );
+
+  // Fetch kalender akademik setiap kali tahun berubah
+  useEffect(() => {
+    async function fetchKalender() {
+      try {
+        const res = await fetch(`/api/kalender-akademik?tahun=${viewYear}`);
+        const data = await res.json();
+        setKalenderEvents(Array.isArray(data) ? data : []);
+      } catch {
+        setKalenderEvents([]);
+      }
+    }
+    fetchKalender();
+  }, [viewYear]);
+
+  // Cek apakah suatu tanggal punya event
+  function getEventOnDate(dateIso: string) {
+    const date = new Date(dateIso + "T12:00:00");
+    return kalenderEvents.filter((e) => {
+      const mulai = new Date(e.tanggalMulai);
+      const selesai = new Date(e.tanggalSelesai);
+      mulai.setHours(0, 0, 0, 0);
+      selesai.setHours(23, 59, 59, 999);
+      return date >= mulai && date <= selesai;
+    });
+  }
+
+  // Dot color per tipe
+  const TIPE_DOT: Record<string, string> = {
+    LIBUR_NASIONAL: "bg-red-500",
+    LIBUR_SEKOLAH: "bg-orange-500",
+    UJIAN: "bg-violet-500",
+    KEGIATAN: "bg-emerald-500",
+    SEMESTER: "bg-indigo-500",
+  };
+
+  function prevMonth() {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else setViewMonth((m) => m - 1);
+  }
+
+  function nextMonth() {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else setViewMonth((m) => m + 1);
+  }
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+      {/* ── Kalender ── */}
       <div className="flex items-center justify-between mb-5">
         <h2 className="font-bold text-gray-900 dark:text-gray-100">Kalender</h2>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {monthLabel}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={prevMonth}
+            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+          >
+            ‹
+          </button>
+          <span className="text-sm text-gray-500 dark:text-gray-400 min-w-[120px] text-center">
+            {monthLabel}
+          </span>
+          <button
+            onClick={nextMonth}
+            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+          >
+            ›
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-7 gap-2 text-center text-xs mb-3">
@@ -131,30 +480,56 @@ function CalendarPanel({
       <div className="grid grid-cols-7 gap-2">
         {days.map((day, i) => {
           if (!day) return <div key={i} />;
-          const fullDate = new Date(year, month, day);
+          const fullDate = new Date(viewYear, viewMonth, day);
           const iso = formatDate(fullDate);
           const active = iso === selectedDate;
+          const isToday = iso === formatDate(new Date());
+          const dayEvents = getEventOnDate(iso);
+          // Ambil max 2 dot unik tipe
+          const dots = [
+            ...new Map(dayEvents.map((e) => [e.tipe, e])).values(),
+          ].slice(0, 2);
+
           return (
             <button
               key={i}
               onClick={() => onSelectDate(iso)}
-              className={`aspect-square rounded-xl text-sm font-medium ${
+              className={`relative flex flex-col items-center justify-start pt-1 pb-1 gap-0.5 rounded-xl text-sm font-medium transition aspect-square ${
                 active
                   ? "bg-indigo-600 text-white"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  : isToday
+                    ? "border border-indigo-400 text-indigo-600 dark:text-indigo-400"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
               }`}
             >
-              {day}
+              <span>{day}</span>
+              {dots.length > 0 && (
+                <div className="flex gap-0.5 justify-center">
+                  {dots.map((e, di) => (
+                    <span
+                      key={di}
+                      className={`w-1 h-1 rounded-full ${
+                        active
+                          ? "bg-white/80"
+                          : (TIPE_DOT[e.tipe] ?? "bg-gray-400")
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </button>
           );
         })}
       </div>
 
-      <div className="mt-6 pt-5 border-t border-gray-200 dark:border-gray-700">
+      {/* ── Event Mendatang ── */}
+      <UpcomingEventsSidebar />
+
+      {/* ── Pengumuman ── */}
+      <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-700">
         <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-3">
           Pengumuman
         </h3>
-
         {canCreatePengumuman && (
           <div className="mb-4 space-y-2">
             <input
@@ -182,7 +557,6 @@ function CalendarPanel({
             </button>
           </div>
         )}
-
         <div className="space-y-3">
           {pengumuman.length === 0 ? (
             <p className="text-sm text-gray-400">Belum ada pengumuman</p>
@@ -211,6 +585,99 @@ function CalendarPanel({
   );
 }
 
+// ─── Absensi Status Card (premium, setara admin StatCard) ─────────────────────
+function AbsensiCard({
+  title,
+  target,
+  icon: Icon,
+  href,
+}: {
+  title: string;
+  target: TargetAbsensi | undefined;
+  icon: React.ElementType;
+  href: string;
+}) {
+  const statusConfig: Record<
+    string,
+    {
+      label: string;
+      gradient: string;
+      accent: string;
+      badgeClass: string;
+      statusIcon: React.ElementType;
+    }
+  > = {
+    HADIR: {
+      label: "Hadir",
+      gradient:
+        "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/25",
+      accent: "text-emerald-100",
+      badgeClass: "bg-white/20",
+      statusIcon: CheckCircle2,
+    },
+    TERLAMBAT: {
+      label: "Terlambat",
+      gradient:
+        "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/25",
+      accent: "text-amber-100",
+      badgeClass: "bg-white/20",
+      statusIcon: AlertCircle,
+    },
+    BELUM: {
+      label: "Belum Scan",
+      gradient:
+        "bg-gradient-to-br from-slate-500 to-slate-700 shadow-slate-500/25",
+      accent: "text-slate-200",
+      badgeClass: "bg-white/20",
+      statusIcon: CircleDashed,
+    },
+  };
+
+  const st = statusConfig[target?.status ?? "BELUM"] ?? statusConfig.BELUM;
+  const StatusIcon = st.statusIcon;
+
+  return (
+    <Link
+      href={href}
+      className={`group relative overflow-hidden rounded-2xl p-5 text-white shadow-lg ${st.gradient} transition hover:scale-[1.02] hover:shadow-xl`}
+    >
+      <div className="absolute -right-3 -top-3 opacity-20">
+        <Icon size={72} strokeWidth={1.5} />
+      </div>
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-3">
+          <span className={`p-2 rounded-xl ${st.badgeClass} backdrop-blur-sm`}>
+            <Icon size={18} />
+          </span>
+          <p className="text-sm font-medium text-white/90">{title}</p>
+        </div>
+        <div className="flex items-center gap-2 mb-1">
+          <StatusIcon size={20} />
+          <p className="text-2xl font-bold tracking-tight">{st.label}</p>
+        </div>
+        {target?.waktuScan ? (
+          <p
+            className={`text-xs mt-1 font-medium flex items-center gap-1 ${st.accent}`}
+          >
+            <Clock size={11} />
+            {new Date(target.waktuScan).toLocaleTimeString("id-ID", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        ) : (
+          <p
+            className={`text-xs mt-1 font-medium flex items-center gap-1.5 ${st.accent}`}
+          >
+            <ArrowRight size={12} />
+            Tap untuk scan
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -228,20 +695,18 @@ export default function DashboardPage() {
   const role = session?.user?.role ?? "";
   const isManagement = ["ADMIN", "PIMPINAN"].includes(role);
   const isStaff = role === "STAFF";
+  const isGuru = role === "GURU";
   const today = new Date().toISOString().split("T")[0];
+  const isToday = selectedDate === today;
 
   async function fetchDashboard() {
     try {
       setLoading(true);
-
-      // Fetch target absensi untuk guru & staff
       if (!isManagement) {
         const targetRes = await fetch("/api/absensi/target");
         const targetData = await targetRes.json();
         setTargets(Array.isArray(targetData) ? targetData : []);
       }
-
-      // Fetch catatan harian untuk staff
       if (isStaff) {
         const catatanRes = await fetch(`/api/catatan-harian?tanggal=${today}`);
         const catatanData = await catatanRes.json();
@@ -251,11 +716,9 @@ export default function DashboardPage() {
             : null,
         );
       }
-
       const res = await fetch(`/api/dashboard?tanggal=${selectedDate}`);
       const json = await res.json();
       setData(json);
-
       const pengumumanRes = await fetch("/api/pengumuman");
       const pengumumanData = await pengumumanRes.json();
       setPengumuman(Array.isArray(pengumumanData) ? pengumumanData : []);
@@ -281,258 +744,603 @@ export default function DashboardPage() {
     if (sessionStatus === "authenticated") fetchDashboard();
   }, [sessionStatus, selectedDate, isStaff]);
 
-  if (loading || !data) {
+  if (loading) {
     return (
-      <div className="p-8 text-center text-gray-400">Memuat dashboard...</div>
+      <div className="max-w-6xl">
+        <DashboardSkeleton />
+      </div>
     );
   }
 
-  const jadwalDashboard = Array.isArray(data?.jadwal) ? data.jadwal : [];
+  if (!data || "error" in data) {
+    return (
+      <div className="max-w-lg mx-auto p-8 text-center rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+        <AlertCircle className="mx-auto text-amber-500 mb-3" size={40} />
+        <p className="text-gray-600 dark:text-gray-400">
+          Gagal memuat dashboard. Silakan muat ulang halaman.
+        </p>
+      </div>
+    );
+  }
 
-  const komposisiData = [
-    { name: "Guru", value: data.totalGuru },
-    { name: "Staff", value: data.totalStaff },
+  const jadwalDashboard = Array.isArray(data.jadwal) ? data.jadwal : [];
+  const jadwalPerKelas = jadwalDashboard.reduce(
+    (acc, item) => {
+      const kelas = item.kelas || "Tanpa Kelas";
+      if (!acc[kelas]) acc[kelas] = [];
+      acc[kelas].push(item);
+      return acc;
+    },
+    {} as Record<string, JadwalItem[]>,
+  );
+  const kelasJadwal = Object.entries(jadwalPerKelas).sort(([a], [b]) =>
+    a.localeCompare(b, "id-ID", { numeric: true }),
+  );
+  const slotMengajar = jadwalDashboard.length;
+  const STATUS_SUDAH_TERCATAT = [
+    "HADIR",
+    "TERLAMBAT",
+    "IZIN",
+    "SAKIT",
+    "ALPHA",
   ];
+
+  const slotSudahScan = jadwalDashboard.filter((j) =>
+    STATUS_SUDAH_TERCATAT.includes(j.status),
+  ).length;
+  const absenBerangkat = targets.find((item) => item.tipe === "BERANGKAT");
+  const absenPulang = targets.find((item) => item.tipe === "PULANG");
+  const userName = session?.user?.name ?? "Pengguna";
+
+  const totalPegawai = (data.totalGuru ?? 0) + (data.totalStaff ?? 0);
+  const pctGuru = pct(data.guruHadir ?? 0, data.totalGuru ?? 0);
+  const pctStaff = pct(data.staffHadir ?? 0, data.totalStaff ?? 0);
+  const pctSiswa = pct(data.siswaHadir ?? 0, data.totalSiswa ?? 0);
 
   const kehadiranData = [
     {
       name: "Guru",
-      Hadir: data.guruHadir,
-      Terlambat: data.guruTerlambat,
-      Belum: data.guruTidakHadir,
+      Hadir: data.guruHadir ?? 0,
+      Terlambat: data.guruTerlambat ?? 0,
+      Belum: data.guruTidakHadir ?? 0,
     },
     {
       name: "Staff",
-      Hadir: data.staffHadir,
-      Terlambat: data.staffTerlambat,
-      Belum: data.staffTidakHadir,
+      Hadir: data.staffHadir ?? 0,
+      Terlambat: data.staffTerlambat ?? 0,
+      Belum: data.staffTidakHadir ?? 0,
+    },
+    {
+      name: "Siswa",
+      Hadir: data.siswaHadir ?? 0,
+      Terlambat: data.siswaTerlambat ?? 0,
+      Belum: data.siswaTidakHadir ?? 0,
     },
   ];
 
-  const absenBerangkat = targets.find((item) => item.tipe === "BERANGKAT");
-  const absenPulang = targets.find((item) => item.tipe === "PULANG");
+  // ─── MANAGEMENT VIEW ────────────────────────────────────────────────────────
+  if (isManagement) {
+    const komposisiData = [
+      { name: "Guru", value: data.totalGuru ?? 0 },
+      { name: "Staff", value: data.totalStaff ?? 0 },
+      { name: "Siswa", value: data.totalSiswa ?? 0 },
+    ];
+    const totalKomunitas = totalPegawai + (data.totalSiswa ?? 0);
 
-  const statusStyle: Record<string, string> = {
-    HADIR: "text-green-600",
-    TERLAMBAT: "text-amber-600",
-    BELUM: "text-gray-500",
-  };
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
-      {/* LEFT */}
-      <div>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Dashboard
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Monitoring kehadiran & aktivitas sekolah
-          </p>
-        </div>
-
-        {/* MANAGEMENT */}
-        {isManagement && (
-          <>
-            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Total Guru
-                </p>
-                <h2 className="text-3xl font-bold mt-2 text-gray-900 dark:text-gray-100">
-                  {data.totalGuru}
-                </h2>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Total Staff
-                </p>
-                <h2 className="text-3xl font-bold mt-2 text-gray-900 dark:text-gray-100">
-                  {data.totalStaff}
-                </h2>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Guru Hadir
-                </p>
-                <h2 className="text-3xl font-bold mt-2 text-green-600">
-                  {data.guruHadir}
-                </h2>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Staff Hadir
-                </p>
-                <h2 className="text-3xl font-bold mt-2 text-indigo-600">
-                  {data.staffHadir}
-                </h2>
-              </div>
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 max-w-[1600px]">
+        <div className="min-w-0">
+          {/* Hero */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 p-6 mb-6 text-white shadow-xl shadow-indigo-500/20">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white" />
+              <div className="absolute -left-4 bottom-0 w-32 h-32 rounded-full bg-white" />
             </div>
-
-            <div className="grid lg:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                <h2 className="font-bold text-gray-900 dark:text-gray-100 mb-4">
-                  Komposisi Guru & Staff
-                </h2>
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={komposisiData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={55}
-                        outerRadius={85}
-                        paddingAngle={4}
-                      >
-                        {komposisiData.map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-indigo-200 text-sm font-medium">
+                  {getGreeting()},
+                </p>
+                <h1 className="text-2xl sm:text-3xl font-bold mt-0.5">
+                  {userName}
+                </h1>
+                <p className="text-indigo-100/90 text-sm mt-2 flex items-center gap-2 flex-wrap">
+                  <CalendarDays size={14} />
+                  {formatTanggalPanjang(selectedDate)}
+                  {!isToday && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(today)}
+                      className="text-xs bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded-full transition"
+                    >
+                      Kembali ke hari ini
+                    </button>
+                  )}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/20">
+                  <TrendingUp size={22} className="text-emerald-300 shrink-0" />
+                  <div>
+                    <p className="text-xs text-indigo-200">Kehadiran pegawai</p>
+                    <p className="text-lg font-bold">
+                      {pct(
+                        (data.guruHadir ?? 0) + (data.staffHadir ?? 0),
+                        totalPegawai,
+                      )}
+                      %
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/20">
+                  <School size={22} className="text-rose-300 shrink-0" />
+                  <div>
+                    <p className="text-xs text-indigo-200">Kehadiran siswa</p>
+                    <p className="text-lg font-bold">
+                      {pct(data.siswaHadir ?? 0, data.totalSiswa ?? 0)}%
+                    </p>
+                  </div>
                 </div>
               </div>
-
-              <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                <h2 className="font-bold text-gray-900 dark:text-gray-100 mb-4">
-                  Grafik Kehadiran
-                </h2>
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={kehadiranData}>
-                      <XAxis dataKey="name" />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip />
-                      <Bar
-                        dataKey="Hadir"
-                        fill="#22c55e"
-                        radius={[6, 6, 0, 0]}
-                      />
-                      <Bar
-                        dataKey="Terlambat"
-                        fill="#f59e0b"
-                        radius={[6, 6, 0, 0]}
-                      />
-                      <Bar
-                        dataKey="Belum"
-                        fill="#94a3b8"
-                        radius={[6, 6, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* GURU & STAFF */}
-        {!isManagement && (
-          <div className="grid sm:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Absen Berangkat
-              </p>
-              <span
-                className={`text-lg font-bold mt-2 block ${statusStyle[absenBerangkat?.status ?? "BELUM"]}`}
-              >
-                {absenBerangkat?.status ?? "Belum Scan"}
-              </span>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Absen Pulang
-              </p>
-              <span
-                className={`text-lg font-bold mt-2 block ${statusStyle[absenPulang?.status ?? "BELUM"]}`}
-              >
-                {absenPulang?.status ?? "Belum Scan"}
-              </span>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {role === "GURU" ? "Jadwal Hari Ini" : "Catatan Harian"}
-              </p>
-              {role === "GURU" ? (
-                <h2 className="text-xl font-bold mt-2 text-indigo-600">
-                  {jadwalDashboard.length} Jadwal
-                </h2>
-              ) : (
-                <Link
-                  href="/catatan-harian"
-                  className="inline-block mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-                >
-                  {catatanHarian
-                    ? "✅ Sudah diisi → Edit"
-                    : "📝 Belum diisi → Isi sekarang"}
-                </Link>
-              )}
             </div>
           </div>
-        )}
 
-        {/* CATATAN HARIAN STAFF — tampil jika role STAFF */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+            <StatCard
+              label="Total Guru"
+              value={data.totalGuru ?? 0}
+              sub="Tenaga pengajar aktif"
+              icon={GraduationCap}
+              gradient="bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-indigo-500/25"
+              accent="text-indigo-200"
+            />
+            <StatCard
+              label="Total Staff"
+              value={data.totalStaff ?? 0}
+              sub="Tenaga kependidikan"
+              icon={Briefcase}
+              gradient="bg-gradient-to-br from-violet-500 to-purple-700 shadow-violet-500/25"
+              accent="text-violet-200"
+            />
+            <StatCard
+              label="Total Siswa"
+              value={data.totalSiswa ?? 0}
+              sub="Siswa aktif terdaftar"
+              icon={School}
+              gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/25"
+              accent="text-rose-100"
+            />
+            <StatCard
+              label="Guru Hadir"
+              value={data.guruHadir ?? 0}
+              sub={`${pctGuru}% dari ${data.totalGuru ?? 0} guru`}
+              icon={UserCheck}
+              gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/25"
+              accent="text-emerald-100"
+            />
+            <StatCard
+              label="Staff Hadir"
+              value={data.staffHadir ?? 0}
+              sub={`${pctStaff}% dari ${data.totalStaff ?? 0} staff`}
+              icon={Users}
+              gradient="bg-gradient-to-br from-sky-500 to-blue-600 shadow-sky-500/25"
+              accent="text-sky-100"
+            />
+            <StatCard
+              label="Siswa Hadir"
+              value={data.siswaHadir ?? 0}
+              sub={`${pctSiswa}% dari ${data.totalSiswa ?? 0} siswa`}
+              icon={UserCheck}
+              gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/25"
+              accent="text-orange-100"
+            />
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {[
+              {
+                label: "Guru",
+                value: data.guruHadir ?? 0,
+                total: data.totalGuru ?? 0,
+                color: CHART_COLORS.hadir,
+                icon: GraduationCap,
+                iconColor: "text-indigo-600",
+              },
+              {
+                label: "Staff",
+                value: data.staffHadir ?? 0,
+                total: data.totalStaff ?? 0,
+                color: CHART_COLORS.staff,
+                icon: Briefcase,
+                iconColor: "text-violet-600",
+              },
+              {
+                label: "Siswa",
+                value: data.siswaHadir ?? 0,
+                total: data.totalSiswa ?? 0,
+                color: "#f43f5e",
+                icon: School,
+                iconColor: "text-rose-600",
+              },
+            ].map(({ label, value, total, color, icon: Icon, iconColor }) => (
+              <div
+                key={label}
+                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm"
+              >
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <Icon size={18} className={iconColor} />
+                  Tingkat Kehadiran {label}
+                </h2>
+                <div className="flex justify-center">
+                  <ProgressRing
+                    label={label}
+                    value={value}
+                    total={total}
+                    color={color}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 mb-1">
+                Komposisi Sekolah
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Guru, staff & siswa aktif
+              </p>
+              <div className="h-[240px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={komposisiData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={3}
+                      strokeWidth={0}
+                    >
+                      {komposisiData.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {totalKomunitas}
+                  </span>
+                  <span className="text-xs text-gray-500">Total</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-center gap-3 mt-2">
+                {komposisiData.map((item, i) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center gap-1.5 text-xs"
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: PIE_COLORS[i] }}
+                    />
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {item.name}: {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 mb-1">
+                Grafik Kehadiran
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Guru, staff & siswa — absen hari ini
+              </p>
+              <div className="h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={kehadiranData} barGap={4}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-gray-200 dark:stroke-gray-700"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: "#9ca3af", fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fill: "#9ca3af", fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    <Bar
+                      dataKey="Hadir"
+                      fill={CHART_COLORS.hadir}
+                      radius={[6, 6, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="Terlambat"
+                      fill={CHART_COLORS.terlambat}
+                      radius={[6, 6, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="Belum"
+                      fill={CHART_COLORS.belum}
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <PelanggaranDashboardSection />
+
+          {/* Jadwal */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/20">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Clock size={18} className="text-violet-600" />
+                Jadwal Hari Ini
+              </h2>
+              <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">
+                {jadwalDashboard.length} jadwal
+              </span>
+            </div>
+            {jadwalDashboard.length === 0 ? (
+              <div className="p-12 text-center">
+                <CalendarDays
+                  size={40}
+                  className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
+                />
+                <p className="text-gray-500">Tidak ada jadwal hari ini</p>
+              </div>
+            ) : (
+              <div className="p-5 space-y-5">
+                {kelasJadwal.map(([kelas, jadwal]) => (
+                  <div
+                    key={kelas}
+                    className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30"
+                  >
+                    <div className="flex items-center justify-between gap-3 px-5 py-3 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                        <GraduationCap size={17} className="text-violet-600" />
+                        Kelas {kelas}
+                      </h3>
+                      <span className="text-xs font-semibold text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-950/50 px-2.5 py-1 rounded-full">
+                        {jadwal.length} jadwal
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                      {jadwal.map((j) => (
+                        <div
+                          key={j.id}
+                          className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 dark:text-gray-100">
+                              {j.mapel}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">
+                                {j.guru}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MapPin size={14} />
+                                {j.ruangan}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between md:justify-end gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                              <Clock size={14} />
+                              {j.jamMulai} – {j.jamSelesai}
+                            </div>
+                            <StatusBadge status={j.status} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Kalender mobile — hanya tampil di bawah xl */}
+          <div className="block xl:hidden mt-6">
+            <CalendarPanel
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              pengumuman={pengumuman}
+              canCreatePengumuman={isManagement}
+              formPengumuman={formPengumuman}
+              setFormPengumuman={setFormPengumuman}
+              simpanPengumuman={simpanPengumuman}
+            />
+          </div>
+        </div>
+
+        <aside className="hidden xl:block sticky top-[96px] self-start max-h-[calc(100vh-120px)] overflow-y-auto">
+          <CalendarPanel
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            pengumuman={pengumuman}
+            canCreatePengumuman={isManagement}
+            formPengumuman={formPengumuman}
+            setFormPengumuman={setFormPengumuman}
+            simpanPengumuman={simpanPengumuman}
+          />
+        </aside>
+      </div>
+    );
+  }
+
+  // ─── GURU & STAFF VIEW ───────────────────────────────────────────────────────
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 max-w-[1600px]">
+      <div className="min-w-0">
+        {/* ── Hero Banner ── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 p-6 mb-6 text-white shadow-xl shadow-indigo-500/20">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white" />
+            <div className="absolute -left-4 bottom-0 w-32 h-32 rounded-full bg-white" />
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-indigo-200 text-sm font-medium">
+                {getGreeting()},
+              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <h1 className="text-2xl sm:text-3xl font-bold">{userName}</h1>
+                {isGuru && (
+                  <span className="text-xs font-semibold bg-white/20 backdrop-blur px-2.5 py-1 rounded-full">
+                    Dashboard Guru
+                  </span>
+                )}
+                {isStaff && (
+                  <span className="text-xs font-semibold bg-white/20 backdrop-blur px-2.5 py-1 rounded-full">
+                    Dashboard Staff
+                  </span>
+                )}
+              </div>
+              <p className="text-indigo-100/90 text-sm mt-2 flex items-center gap-2 flex-wrap">
+                <CalendarDays size={14} />
+                {formatTanggalPanjang(selectedDate)}
+                {!isToday && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(today)}
+                    className="text-xs bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded-full transition"
+                  >
+                    Kembali ke hari ini
+                  </button>
+                )}
+              </p>
+              {isGuru && slotMengajar > 0 && (
+                <p className="text-sm mt-2 text-indigo-100 font-medium flex items-center gap-2">
+                  <BookOpen size={14} />
+                  Mengajar: {slotSudahScan}/{slotMengajar} Jadwal Sudah Tercatat
+                </p>
+              )}
+            </div>
+            <Link
+              href="/scan"
+              className="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-50 transition shadow-lg shrink-0"
+            >
+              <ScanLine size={18} />
+              Scan Absensi
+            </Link>
+          </div>
+        </div>
+
+        {/* ── Absensi harian ── */}
+        <div className="grid sm:grid-cols-2 gap-4 mb-6">
+          <AbsensiCard
+            title="Absen Berangkat"
+            target={absenBerangkat}
+            icon={Sun}
+            href="/scan"
+          />
+          <AbsensiCard
+            title="Absen Pulang"
+            target={absenPulang}
+            icon={Sunset}
+            href="/scan"
+          />
+        </div>
+
+        {isGuru && <UpcomingEventsInline />}
+
+        {isGuru && (
+          <div className="mb-6">
+            <GuruDashboardBody
+              jadwal={jadwalDashboard.map((j) => ({
+                id: j.id,
+                jamMulai: j.jamMulai,
+                jamSelesai: j.jamSelesai,
+                mapel: j.mapel,
+                kelas: j.kelas,
+                ruangan: j.ruangan,
+                status: j.status,
+                waktuScan: j.waktuScan,
+              }))}
+              targets={isToday ? targets : []}
+              isToday={isToday}
+            />
+          </div>
+        )}
+        <PelanggaranDashboardSection />
+
+        {/* ── Catatan Harian (STAFF only) ── */}
         {isStaff && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
-            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-bold text-gray-900 dark:text-gray-100">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-950/30">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <NotebookPen size={18} className="text-indigo-600" />
                 Catatan Harian
               </h2>
               <Link
                 href="/catatan-harian"
-                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1.5 rounded-lg transition"
               >
                 {catatanHarian ? "Edit Catatan" : "Isi Catatan"}
               </Link>
             </div>
-
             {catatanHarian ? (
-              <div className="p-5 space-y-4">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                    Kegiatan
-                  </p>
-                  <p className="text-sm text-gray-900 dark:text-gray-100">
-                    {catatanHarian.kegiatan}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                    Hasil
-                  </p>
-                  <p className="text-sm text-gray-900 dark:text-gray-100">
-                    {catatanHarian.hasil}
-                  </p>
-                </div>
-                {catatanHarian.kendala && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                      Kendala
+              <div className="p-5 grid sm:grid-cols-3 gap-4">
+                {[
+                  { key: "Kegiatan", val: catatanHarian.kegiatan },
+                  { key: "Hasil", val: catatanHarian.hasil },
+                  ...(catatanHarian.kendala
+                    ? [{ key: "Kendala", val: catatanHarian.kendala }]
+                    : []),
+                ].map((block) => (
+                  <div
+                    key={block.key}
+                    className="rounded-xl bg-gray-50 dark:bg-gray-900/50 p-4 border border-gray-100 dark:border-gray-700"
+                  >
+                    <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2">
+                      {block.key}
                     </p>
-                    <p className="text-sm text-gray-900 dark:text-gray-100">
-                      {catatanHarian.kendala}
+                    <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-4">
+                      {block.val}
                     </p>
                   </div>
-                )}
+                ))}
                 {catatanHarian.foto && catatanHarian.foto.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  <div className="sm:col-span-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                       Foto ({catatanHarian.foto.length})
                     </p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                       {catatanHarian.foto.map((url, i) => (
                         <a
                           key={i}
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          className="group relative aspect-square rounded-xl overflow-hidden ring-2 ring-transparent hover:ring-indigo-400 transition"
                         >
                           <img
                             src={url}
                             alt={`Foto ${i + 1}`}
-                            className="w-full h-20 object-cover rounded-lg hover:opacity-80 transition"
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                           />
                         </a>
                       ))}
@@ -541,14 +1349,19 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              <div className="p-8 text-center">
-                <p className="text-gray-400 text-sm mb-3">
+              <div className="p-10 text-center">
+                <NotebookPen
+                  size={40}
+                  className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
+                />
+                <p className="text-gray-500 text-sm mb-4">
                   Belum ada catatan hari ini
                 </p>
                 <Link
                   href="/catatan-harian"
-                  className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+                  className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-md shadow-indigo-500/25"
                 >
+                  <NotebookPen size={16} />
                   Isi Catatan Sekarang
                 </Link>
               </div>
@@ -556,54 +1369,97 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* JADWAL HARI INI — tampil untuk management & guru */}
-        {(isManagement || role === "GURU") && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="font-bold text-gray-900 dark:text-gray-100">
-                Jadwal Hari Ini
+        {/* ── Jadwal (GURU only) ── */}
+        {isGuru && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/20">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Clock size={18} className="text-violet-600" />
+                Jadwal Mengajar Hari Ini
               </h2>
+              <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">
+                {jadwalDashboard.length} slot
+              </span>
             </div>
-
             {jadwalDashboard.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">
-                Tidak ada jadwal hari ini
+              <div className="p-12 text-center">
+                <CalendarDays
+                  size={40}
+                  className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
+                />
+                <p className="text-gray-500">
+                  Tidak ada jadwal mengajar hari ini
+                </p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                {jadwalDashboard.map((j) => (
+              <div className="p-5 space-y-5">
+                {kelasJadwal.map(([kelas, jadwal]) => (
                   <div
-                    key={j.id}
-                    className="p-5 flex items-start justify-between gap-4"
+                    key={kelas}
+                    className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30"
                   >
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-gray-100">
-                        {j.mapel}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {j.kelas} • {j.ruangan}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {j.jamMulai} - {j.jamSelesai}
-                      </p>
+                    <div className="flex items-center justify-between gap-3 px-5 py-3 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                        <GraduationCap size={17} className="text-violet-600" />
+                        Kelas {kelas}
+                      </h3>
+                      <span className="text-xs font-semibold text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-950/50 px-2.5 py-1 rounded-full">
+                        {jadwal.length} slot
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900 dark:text-gray-100">
-                        {j.guru}
-                      </p>
-                      {isManagement && (
-                        <span
-                          className={`inline-flex mt-2 px-3 py-1 rounded-full text-xs font-medium ${
-                            j.status === "HADIR"
-                              ? "bg-green-100 text-green-700"
-                              : j.status === "TERLAMBAT"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-gray-100 text-gray-600"
-                          }`}
+
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                      {jadwal.map((j) => (
+                        <div
+                          key={j.id}
+                          className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition"
                         >
-                          {j.status}
-                        </span>
-                      )}
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 dark:text-gray-100">
+                              {j.mapel}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+                              <span className="flex items-center gap-1">
+                                <MapPin size={14} />
+                                {j.ruangan}
+                              </span>
+                              {j.waktuScan && (
+                                <span className="flex items-center gap-1">
+                                  <CheckCircle2 size={14} />
+                                  {["IZIN", "SAKIT", "ALPHA"].includes(j.status)
+                                    ? "Dicatat"
+                                    : "Scan"}{" "}
+                                  {new Date(j.waktuScan).toLocaleTimeString(
+                                    "id-ID",
+                                    {
+                                      timeZone: "Asia/Jakarta",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    },
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                              <Clock size={14} />
+                              {j.jamMulai} – {j.jamSelesai}
+                            </div>
+                            <StatusBadge status={j.status} />
+                            {j.status === "BELUM" && isToday && (
+                              <Link
+                                href="/scan"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                              >
+                                Scan sekarang
+                                <ArrowRight size={12} />
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -611,20 +1467,33 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+
+        {/* Kalender mobile — hanya tampil di bawah xl */}
+        <div className="block xl:hidden mt-6">
+          <CalendarPanel
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            pengumuman={pengumuman}
+            canCreatePengumuman={false}
+            formPengumuman={formPengumuman}
+            setFormPengumuman={setFormPengumuman}
+            simpanPengumuman={simpanPengumuman}
+          />
+        </div>
       </div>
 
-      {/* RIGHT */}
-      <div>
+      {/* ── Sidebar Kalender ── */}
+      <aside className="hidden xl:block sticky top-[96px] self-start max-h-[calc(100vh-120px)] overflow-y-auto">
         <CalendarPanel
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           pengumuman={pengumuman}
-          canCreatePengumuman={isManagement}
+          canCreatePengumuman={false}
           formPengumuman={formPengumuman}
           setFormPengumuman={setFormPengumuman}
           simpanPengumuman={simpanPengumuman}
         />
-      </div>
+      </aside>
     </div>
   );
 }

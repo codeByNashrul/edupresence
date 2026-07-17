@@ -9,11 +9,18 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session) redirect("/login");
+
+  if (!session?.user) {
+    redirect("/login");
+  }
 
   return (
     <AuthProvider>
-      <DashboardShell role={session.user.role} user={session.user}>
+      <DashboardShell
+        role={
+          session.user.role as "ADMIN" | "PIMPINAN" | "GURU" | "STAFF" | "ORTU"
+        }
+      >
         {children}
       </DashboardShell>
     </AuthProvider>

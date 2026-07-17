@@ -1,39 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
+type UserRole = "ADMIN" | "PIMPINAN" | "GURU" | "STAFF" | "ORTU";
+
 interface Props {
-  children: React.ReactNode;
-  role: string;
-  user: {
-    name?: string | null;
-    role?: string | null;
-  };
+  children: ReactNode;
+  role: UserRole;
 }
 
-export function DashboardShell({ children, role, user }: Props) {
+export function DashboardShell({ children, role }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+
+  const sidebarExpanded = sidebarOpen || sidebarHovered;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <Sidebar
         role={role}
         isOpen={sidebarOpen}
-        isCollapsed={sidebarCollapsed}
+        isExpanded={sidebarExpanded}
+        onHoverChange={setSidebarHovered}
         onClose={() => setSidebarOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <Header
-          user={user}
-          onMenuClick={() => setSidebarOpen(true)}
-          onDesktopMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
+      <div
+        className={`flex min-w-0 flex-col transition-all duration-300 ${
+          sidebarExpanded ? "lg:ml-64" : "lg:ml-20"
+        }`}
+      >
+        <Header onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );

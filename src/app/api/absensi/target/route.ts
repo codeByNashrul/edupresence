@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
+import { todayJakarta, dayJakarta } from "@/lib/time";
+import type { HariMinggu } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -12,33 +13,63 @@ export async function GET() {
     }
 
     const tanggal = todayJakarta();
+    const hariSekarang = dayJakarta();
 
-    const hariMap: Record<number, string> = {
-      1: "SENIN",
-      2: "SELASA",
-      3: "RABU",
-      4: "KAMIS",
-      5: "JUMAT",
-      6: "SABTU",
-    };
+    if (hariSekarang === "MINGGU") {
+      return NextResponse.json(
+        {
+          error: "Tidak ada jadwal mengajar pada hari Minggu",
+        },
+        { status: 400 },
+      );
+    }
 
-    const hariIni = dayJakarta();
+    const hariIni = hariSekarang as HariMinggu;
+
     const userId = session.user.id;
     const role = session.user.role;
 
-    const absensiHariIni = await prisma.absensi.findMany({
-      where: { userId, tanggal },
-      include: {
-        ruangan: true,
-        jadwal: {
-          include: {
-            kelas: true,
-            mataPelajaran: true,
-            ruangan: true,
+    const [absensiHariIni, izinHariIni] = await Promise.all([
+      prisma.absensi.findMany({
+        where: {
+          userId,
+          tanggal,
+        },
+        include: {
+          ruangan: true,
+          jadwal: {
+            include: {
+              kelas: true,
+              mataPelajaran: true,
+              ruangan: true,
+            },
           },
         },
-      },
-    });
+      }),
+
+      prisma.izin.findFirst({
+        where: {
+          userId,
+          status: "APPROVED",
+          tanggalMulai: {
+            lte: tanggal,
+          },
+          tanggalAkhir: {
+            gte: tanggal,
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+    ]);
+
+    const statusIzin =
+      izinHariIni?.jenisIzin === "SAKIT"
+        ? "SAKIT"
+        : izinHariIni
+          ? "IZIN"
+          : null;
 
     const targets: any[] = [];
 
@@ -47,22 +78,29 @@ export async function GET() {
     targets.push({
       tipe: "BERANGKAT",
       label: "Absen Berangkat",
-      detail: "Scan QR saat datang ke sekolah",
-      status: berangkat?.status ?? "BELUM",
+      detail: izinHariIni
+        ? `Tercatat ${izinHariIni.jenisIzin.toLowerCase().replaceAll("_", " ")}`
+        : "Scan QR saat datang ke sekolah",
+      status: berangkat?.status ?? statusIzin ?? "BELUM",
       waktuScan: berangkat?.waktuScan ?? null,
       ruangan: berangkat?.ruangan?.nama ?? null,
+      sumberStatus: berangkat ? "ABSENSI" : izinHariIni ? "IZIN" : null,
+      izinId: !berangkat ? (izinHariIni?.id ?? null) : null,
+      jenisIzin: !berangkat ? (izinHariIni?.jenisIzin ?? null) : null,
     });
 
-    if (role === "GURU" && hariIni) {
+    if (role === "GURU") {
       const guru = await prisma.guru.findUnique({
-        where: { userId },
+        where: {
+          userId,
+        },
       });
 
       if (guru) {
         const jadwalHariIni = await prisma.jadwal.findMany({
           where: {
             guruId: guru.id,
-            hari: hariIni as any,
+            hari: hariIni,
             aktif: true,
           },
           include: {
@@ -70,19 +108,29 @@ export async function GET() {
             mataPelajaran: true,
             ruangan: true,
           },
-          orderBy: { jamMulai: "asc" },
+          orderBy: {
+            jamMulai: "asc",
+          },
         });
 
         for (const j of jadwalHariIni) {
           const absensiJadwal = absensiHariIni.find((a) => a.jadwalId === j.id);
 
           targets.push({
+            jadwalId: j.id,
             tipe: "JAM_MENGAJAR",
             label: "Absen Jam Mengajar",
             detail: `${j.jamMulai} - ${j.jamSelesai} | ${j.mataPelajaran.nama} | ${j.kelas.nama} | ${j.ruangan.nama}`,
-            status: absensiJadwal?.status ?? "BELUM",
+            status: absensiJadwal?.status ?? statusIzin ?? "BELUM",
             waktuScan: absensiJadwal?.waktuScan ?? null,
-            ruangan: absensiJadwal?.ruangan?.nama ?? null,
+            ruangan: j.ruangan.nama,
+            sumberStatus: absensiJadwal
+              ? "ABSENSI"
+              : izinHariIni
+                ? "IZIN"
+                : null,
+            izinId: !absensiJadwal ? (izinHariIni?.id ?? null) : null,
+            jenisIzin: !absensiJadwal ? (izinHariIni?.jenisIzin ?? null) : null,
           });
         }
       }
@@ -93,14 +141,21 @@ export async function GET() {
     targets.push({
       tipe: "PULANG",
       label: "Absen Pulang",
-      detail: "Scan QR saat pulang",
-      status: pulang?.status ?? "BELUM",
+      detail: izinHariIni
+        ? `Tercatat ${izinHariIni.jenisIzin.toLowerCase().replaceAll("_", " ")}`
+        : "Scan QR saat pulang",
+      status: pulang?.status ?? statusIzin ?? "BELUM",
       waktuScan: pulang?.waktuScan ?? null,
       ruangan: pulang?.ruangan?.nama ?? null,
+      sumberStatus: pulang ? "ABSENSI" : izinHariIni ? "IZIN" : null,
+      izinId: !pulang ? (izinHariIni?.id ?? null) : null,
+      jenisIzin: !pulang ? (izinHariIni?.jenisIzin ?? null) : null,
     });
 
     return NextResponse.json(targets);
   } catch (error) {
+    console.error("TARGET_ABSENSI_ERROR:", error);
+
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

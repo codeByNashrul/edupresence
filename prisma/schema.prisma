@@ -21,12 +21,15 @@ enum Role {
   PIMPINAN
   GURU
   STAFF
+  ORTU
 }
 
 enum StatusAbsensi {
   HADIR
   TERLAMBAT
-  TIDAK_HADIR
+  IZIN
+  SAKIT
+  ALPHA
 }
 
 enum TipeAbsensi {
@@ -42,6 +45,19 @@ enum HariMinggu {
   KAMIS
   JUMAT
   SABTU
+}
+
+enum TipeKalender {
+  LIBUR_NASIONAL
+  LIBUR_SEKOLAH
+  UJIAN
+  KEGIATAN
+  SEMESTER
+}
+
+enum SemesterAkademik {
+  GANJIL
+  GENAP
 }
 
 // ------------------------------------------------------------
@@ -67,8 +83,24 @@ model User {
   kegiatanStaff KegiatanStaff[]
   pengumuman    Pengumuman[]
   catatanHarian CatatanHarian[]
+  izin          Izin[]
 
   @@map("users")
+}
+
+model UserOrtu {
+  id        String   @id @default(cuid())
+  nama      String
+  nis       String   @unique // login pakai NIS anak
+  password  String // bcrypt hash, dibuat admin
+  siswaId   String   @unique // 1 akun = 1 anak
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  siswa Siswa @relation(fields: [siswaId], references: [id])
+
+  @@map("user_ortu")
 }
 
 // ------------------------------------------------------------
@@ -158,8 +190,13 @@ model Jadwal {
   mataPelajaranId String
   ruanganId       String
   hari            HariMinggu
+
   jamMulai        String // format: "07:00"
   jamSelesai      String // format: "08:30"
+
+  tahunAjaran     String     @default("2026/2027")
+  semester        SemesterAkademik   @default(GANJIL)
+
   aktif           Boolean    @default(true)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -206,14 +243,23 @@ model Absensi {
 // ------------------------------------------------------------
 
 model Pengaturan {
-  id                  String   @id @default(cuid())
-  toleransiMenit      Int      @default(15) // toleransi keterlambatan
-  jamBerangkatMulai   String   @default("06:00")
-  jamBerangkatSelesai String   @default("08:00")
-  jamPulangMulai      String   @default("13:00")
-  jamPulangSelesai    String   @default("16:00")
-  templatePesanWa     String   @default("Yth. Bpk/Ibu {nama},\nAnda terjadwal mengajar {mapel} kelas {kelas} pada jam {jam} hari ini.\nMohon konfirmasi kehadiran Anda.\nTerima kasih.")
-  updatedAt           DateTime @updatedAt
+  id String @id @default(cuid())
+
+  // Kehadiran harian
+  jamBerangkatMulai        String @default("07:00")
+  jamBerangkatHadirSelesai String @default("10:00")
+  jamBerangkatSelesai      String @default("12:00")
+
+  // Jam mengajar
+  toleransiMengajarMenit Int @default(30) @map("toleransiMenit")
+
+  // Kepulangan
+  jamPulangMulai   String @default("13:00")
+  jamPulangSelesai String @default("16:00")
+
+  templatePesanWa String @default("Yth. Bpk/Ibu {nama},\nAnda terjadwal mengajar {mapel} kelas {kelas} pada jam {jam} hari ini.\nMohon konfirmasi kehadiran Anda.\nTerima kasih.")
+
+  updatedAt DateTime @updatedAt
 
   @@map("pengaturan")
 }
@@ -259,9 +305,11 @@ model Siswa {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  kelas           Kelas                  @relation(fields: [kelasId], references: [id])
-  absensi         AbsensiSiswa[]
-  absensiKegiatan AbsensiKegiatanSiswa[]
+  kelas            Kelas                  @relation(fields: [kelasId], references: [id])
+  absensi          AbsensiSiswa[]
+  absensiKegiatan  AbsensiKegiatanSiswa[]
+  rekapPelanggaran RekapPelanggaran[]
+  ortu             UserOrtu?
 
   @@map("siswa")
 }
@@ -321,4 +369,130 @@ model CatatanHarian {
 
   @@unique([userId, tanggal]) // satu catatan per staff per hari
   @@map("catatan_harian")
+}
+
+// ─── REKAP PELANGGARAN MINGGUAN ──────────────────────────────────────────────
+
+model RekapPelanggaran {
+  id           String   @id @default(cuid())
+  siswaId      String
+  mingguKe     Int
+  tahunAjaran  String
+  semester     String
+  tanggalMulai DateTime
+  tanggalAkhir DateTime
+
+  // Sholat Berjamaah
+  subuhS  Int @default(0)
+  subuhI  Int @default(0)
+  subuhA  Int @default(0)
+  dzuhurS Int @default(0)
+  dzuhurI Int @default(0)
+  dzuhurA Int @default(0)
+  asarS   Int @default(0)
+  asarI   Int @default(0)
+  asarA   Int @default(0)
+  magribS Int @default(0)
+  magribI Int @default(0)
+  magribA Int @default(0)
+  isyaS   Int @default(0)
+  isyaI   Int @default(0)
+  isyaA   Int @default(0)
+
+  // BTA/Kitab
+  btaS Int @default(0)
+  btaI Int @default(0)
+  btaA Int @default(0)
+
+  // KBM (menggantikan KBM/Jam 1-10 + Do'a)
+  kbmS Int @default(0)
+  kbmI Int @default(0)
+  kbmA Int @default(0)
+
+  // Ekstrakurikuler
+  ekskulS Int @default(0)
+  ekskulI Int @default(0)
+  ekskulA Int @default(0)
+
+  // Vokasional Skill
+  vokasionalS Int @default(0)
+  vokasionalI Int @default(0)
+  vokasionalA Int @default(0)
+
+  // Piket Kebersihan
+  piketS Int @default(0)
+  piketI Int @default(0)
+  piketA Int @default(0)
+
+  // Lain-lain (1 angka)
+  lain Int @default(0)
+
+  // Jumlah Minggu Ini (rename dari apn/app/sisaAp)
+  apnMingguIni    Int @default(0)
+  appMingguIni    Int @default(0)
+  sisaApMingguIni Int @default(0)
+
+  // Akumulasi Minggu Lalu (diisi manual)
+  sisaApMingguLalu Int @default(0)
+
+  // Akumulasi Keseluruhan
+  apnTotal    Int  @default(0)
+  appTotal    Int  @default(0)
+  sisaApTotal Int  @default(0)
+  noUrut      Int?
+
+  // Pembimbingan & Keterangan
+  pembimbingan String? // "Wali Kelas" | "BK/BP" | "Tidak Ada"
+  keterangan   String? // "aktif" | "pasif"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  siswa Siswa @relation(fields: [siswaId], references: [id])
+
+  @@unique([siswaId, mingguKe, tahunAjaran, semester])
+  @@map("rekap_pelanggaran")
+}
+
+enum StatusIzin {
+  APPROVED
+  DITOLAK
+  DIBATALKAN
+}
+
+enum JenisIzin {
+  SAKIT
+  IZIN
+  DINAS_LUAR
+  CUTI
+  LAINNYA
+}
+
+model Izin {
+  id           String     @id @default(cuid())
+  userId       String
+  jenisIzin    JenisIzin
+  jenisCustom  String? // untuk jenis LAINNYA
+  tanggalMulai DateTime
+  tanggalAkhir DateTime
+  keterangan   String     @db.Text
+  suratUrl     String? // URL file surat dari Supabase Storage
+  status       StatusIzin @default(APPROVED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("izin")
+}
+
+model KalenderAkademik {
+  id             String       @id @default(cuid())
+  judul          String
+  deskripsi      String?
+  tipe           TipeKalender
+  tanggalMulai   DateTime
+  tanggalSelesai DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }

@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { nowJakarta, todayJakarta, timeJakarta } from "@/lib/time";
+import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
+import type { HariMinggu } from "@prisma/client";
+
+function toMinutes(time: string) {
+  const [jam, menit] = time.split(":").map(Number);
+  return jam * 60 + menit;
+}
 
 export async function POST(req: Request) {
   try {
@@ -12,15 +18,34 @@ export async function POST(req: Request) {
     }
 
     const { kodeQr } = await req.json();
+
+    if (!kodeQr || typeof kodeQr !== "string") {
+      return NextResponse.json(
+        { error: "Kode QR wajib diisi" },
+        { status: 400 },
+      );
+    }
+
     const userId = session.user.id;
     const role = session.user.role;
     const now = nowJakarta();
-    const pengaturan = await prisma.pengaturan.findFirst();
-    const toleransi = pengaturan?.toleransiMenit ?? 15;
-
     const tanggal = todayJakarta();
-
     const jamSekarang = timeJakarta();
+
+    const pengaturan = await prisma.pengaturan.findFirst();
+
+    const jamBerangkatMulai = pengaturan?.jamBerangkatMulai ?? "07:00";
+
+    const jamBerangkatHadirSelesai =
+      pengaturan?.jamBerangkatHadirSelesai ?? "10:00";
+
+    const jamBerangkatSelesai = pengaturan?.jamBerangkatSelesai ?? "12:00";
+
+    const toleransiMengajarMenit = pengaturan?.toleransiMengajarMenit ?? 30;
+
+    const jamPulangMulai = pengaturan?.jamPulangMulai ?? "13:00";
+
+    const jamPulangSelesai = pengaturan?.jamPulangSelesai ?? "16:00";
 
     let tipe: "BERANGKAT" | "JAM_MENGAJAR" | "PULANG";
     let ruanganId: string | null = null;
@@ -35,8 +60,11 @@ export async function POST(req: Request) {
     } else {
       tipe = "JAM_MENGAJAR";
 
-      const ruangan = await prisma.ruangan.findUnique({
-        where: { kodeQr, aktif: true },
+      const ruangan = await prisma.ruangan.findFirst({
+        where: {
+          kodeQr,
+          aktif: true,
+        },
       });
 
       if (!ruangan) {
@@ -50,46 +78,63 @@ export async function POST(req: Request) {
       ruanganNama = ruangan.nama;
     }
 
-    const sudahScan = await prisma.absensi.findFirst({
-      where: {
-        userId,
-        tipe,
-        tanggal,
-        ...(tipe === "JAM_MENGAJAR" ? {} : {}),
-      },
-    });
-
-    if (sudahScan && tipe !== "JAM_MENGAJAR") {
-      return NextResponse.json(
-        {
-          error: `Anda sudah melakukan absensi ${tipe
-            .toLowerCase()
-            .replace("_", " ")} hari ini`,
+    if (tipe !== "JAM_MENGAJAR") {
+      const sudahScan = await prisma.absensi.findFirst({
+        where: {
+          userId,
+          tipe,
+          tanggal,
         },
-        { status: 400 },
-      );
-    }
+      });
 
-    let status: "HADIR" | "TERLAMBAT" | "TIDAK_HADIR" = "HADIR";
-    let jadwalId: string | null = null;
-
-    if (tipe === "BERANGKAT") {
-      const [jamB, menitB] = (pengaturan?.jamBerangkatSelesai ?? "10:00")
-        .split(":")
-        .map(Number);
-
-      const batasBerangkat = new Date(now);
-      batasBerangkat.setHours(jamB, menitB, 0, 0);
-
-      if (now.getTime() > batasBerangkat.getTime()) {
-        status = "TERLAMBAT";
+      if (sudahScan) {
+        return NextResponse.json(
+          {
+            error: `Anda sudah melakukan absensi ${tipe
+              .toLowerCase()
+              .replace("_", " ")} hari ini`,
+          },
+          { status: 400 },
+        );
       }
     }
 
-    if (tipe === "PULANG") {
-      const jamPulangMulai = pengaturan?.jamPulangMulai ?? "13:00";
+    let status: "HADIR" | "TERLAMBAT" = "HADIR";
+    let jadwalId: string | null = null;
 
-      if (jamSekarang < jamPulangMulai) {
+    if (tipe === "BERANGKAT") {
+      const menitSekarang = toMinutes(jamSekarang);
+      const menitMulai = toMinutes(jamBerangkatMulai);
+      const menitBatasHadir = toMinutes(jamBerangkatHadirSelesai);
+      const menitSelesai = toMinutes(jamBerangkatSelesai);
+
+      if (menitSekarang < menitMulai) {
+        return NextResponse.json(
+          {
+            error: `Absensi berangkat dimulai pukul ${jamBerangkatMulai}`,
+          },
+          { status: 400 },
+        );
+      }
+
+      if (menitSekarang > menitSelesai) {
+        return NextResponse.json(
+          {
+            error: `Absensi berangkat sudah ditutup pukul ${jamBerangkatSelesai}`,
+          },
+          { status: 400 },
+        );
+      }
+
+      status = menitSekarang > menitBatasHadir ? "TERLAMBAT" : "HADIR";
+    }
+
+    if (tipe === "PULANG") {
+      const menitSekarang = toMinutes(jamSekarang);
+      const menitMulaiPulang = toMinutes(jamPulangMulai);
+      const menitSelesaiPulang = toMinutes(jamPulangSelesai);
+
+      if (menitSekarang < menitMulaiPulang) {
         return NextResponse.json(
           {
             error: `Belum waktunya absen pulang. Mulai pukul ${jamPulangMulai}`,
@@ -97,36 +142,46 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+
+      if (menitSekarang > menitSelesaiPulang) {
+        return NextResponse.json(
+          {
+            error: `Absensi pulang sudah ditutup pukul ${jamPulangSelesai}`,
+          },
+          { status: 400 },
+        );
+      }
+
+      status = "HADIR";
     }
 
     if (tipe === "JAM_MENGAJAR") {
       if (role !== "GURU") {
         return NextResponse.json(
-          { error: "Hanya guru yang dapat absen jam mengajar" },
+          {
+            error: "Hanya guru yang dapat absen jam mengajar",
+          },
           { status: 400 },
         );
       }
 
-      const hariMap: Record<number, string> = {
-        1: "SENIN",
-        2: "SELASA",
-        3: "RABU",
-        4: "KAMIS",
-        5: "JUMAT",
-        6: "SABTU",
-      };
+      const hariSekarang = dayJakarta();
 
-      const hariIni = hariMap[now.getDay()];
-
-      if (!hariIni) {
+      if (hariSekarang === "MINGGU") {
         return NextResponse.json(
-          { error: "Tidak ada jadwal mengajar hari ini" },
+          {
+            error: "Tidak ada jadwal mengajar pada hari Minggu",
+          },
           { status: 400 },
         );
       }
 
-      const guruData = await prisma.guru.findFirst({
-        where: { userId },
+      const hariIni = hariSekarang as HariMinggu;
+
+      const guruData = await prisma.guru.findUnique({
+        where: {
+          userId,
+        },
       });
 
       if (!guruData) {
@@ -139,17 +194,23 @@ export async function POST(req: Request) {
       const jadwal = await prisma.jadwal.findFirst({
         where: {
           guruId: guruData.id,
-          hari: hariIni as any,
+          hari: hariIni,
           aktif: true,
           ruanganId: ruanganId ?? undefined,
-          jamMulai: { lte: jamSekarang },
-          jamSelesai: { gte: jamSekarang },
+          jamMulai: {
+            lte: jamSekarang,
+          },
+          jamSelesai: {
+            gte: jamSekarang,
+          },
         },
       });
 
       if (!jadwal) {
         return NextResponse.json(
-          { error: "Tidak ada jadwal mengajar aktif di ruangan ini" },
+          {
+            error: "Tidak ada jadwal mengajar aktif di ruangan ini",
+          },
           { status: 400 },
         );
       }
@@ -167,21 +228,16 @@ export async function POST(req: Request) {
 
       if (sudahScanJadwal) {
         return NextResponse.json(
-          { error: "Anda sudah scan untuk jadwal mengajar ini" },
+          {
+            error: "Anda sudah scan untuk jadwal mengajar ini",
+          },
           { status: 400 },
         );
       }
 
-      const [jamJ, menitJ] = jadwal.jamMulai.split(":").map(Number);
+      const selisihMenit = toMinutes(jamSekarang) - toMinutes(jadwal.jamMulai);
 
-      const jadwalDate = new Date(now);
-      jadwalDate.setHours(jamJ, menitJ, 0, 0);
-
-      const selisih = (now.getTime() - jadwalDate.getTime()) / 60000;
-
-      if (selisih > toleransi) {
-        status = "TERLAMBAT";
-      }
+      status = selisihMenit > toleransiMengajarMenit ? "TERLAMBAT" : "HADIR";
     }
 
     const absensi = await prisma.absensi.create({
@@ -201,11 +257,7 @@ export async function POST(req: Request) {
       id: absensi.id,
       tipe,
       status,
-      waktu: now.toLocaleTimeString("id-ID", {
-        timeZone: "Asia/Jakarta",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      waktu: jamSekarang,
       ruangan: ruanganNama,
     });
   } catch (error) {

@@ -1,28 +1,47 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { nowJakarta, todayJakarta } from "@/lib/time";
+import { nowJakarta, todayJakarta, timeJakarta } from "@/lib/time";
+
+function toMinutes(time: string) {
+  const [jam, menit] = time.split(":").map(Number);
+  return jam * 60 + menit;
+}
 
 export async function POST(req: Request) {
   try {
     const session = await auth();
 
     if (
-      !session ||
+      !session?.user ||
       !["ADMIN", "PIMPINAN", "GURU", "STAFF"].includes(session.user.role)
     ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { kodeQr } = await req.json();
+    const body: unknown = await req.json();
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Data tidak valid" }, { status: 400 });
+    }
+
+    const { kodeQr: rawKodeQr } = body as {
+      kodeQr?: unknown;
+    };
+
+    const kodeQr = typeof rawKodeQr === "string" ? rawKodeQr.trim() : "";
 
     if (!kodeQr) {
       return NextResponse.json({ error: "QR tidak valid" }, { status: 400 });
     }
 
     const siswa = await prisma.siswa.findUnique({
-      where: { kodeQr },
-      include: { kelas: true },
+      where: {
+        kodeQr,
+      },
+      include: {
+        kelas: true,
+      },
     });
 
     if (!siswa || !siswa.aktif) {
@@ -34,6 +53,7 @@ export async function POST(req: Request) {
 
     const tanggal = todayJakarta();
     const now = nowJakarta();
+    const jamSekarang = timeJakarta();
 
     const sudahAbsen = await prisma.absensiSiswa.findFirst({
       where: {
@@ -44,24 +64,46 @@ export async function POST(req: Request) {
 
     if (sudahAbsen) {
       return NextResponse.json(
-        { error: `${siswa.nama} sudah absen hari ini` },
-        { status: 400 },
+        {
+          error: `${siswa.nama} sudah absen hari ini`,
+        },
+        { status: 409 },
       );
     }
 
     const pengaturan = await prisma.pengaturan.findFirst();
-    const toleransi = pengaturan?.toleransiMenit ?? 15;
 
-    const [jamB, menitB] = (pengaturan?.jamBerangkatMulai ?? "06:00")
-      .split(":")
-      .map(Number);
+    const jamBerangkatMulai = pengaturan?.jamBerangkatMulai ?? "07:00";
 
-    const jadwalBerangkat = new Date(now);
-    jadwalBerangkat.setHours(jamB, menitB, 0, 0);
+    const jamBerangkatHadirSelesai =
+      pengaturan?.jamBerangkatHadirSelesai ?? "10:00";
 
-    const selisih = (now.getTime() - jadwalBerangkat.getTime()) / 60000;
+    const jamBerangkatSelesai = pengaturan?.jamBerangkatSelesai ?? "12:00";
 
-    const status = selisih > toleransi ? "TERLAMBAT" : "HADIR";
+    const menitSekarang = toMinutes(jamSekarang);
+    const menitMulai = toMinutes(jamBerangkatMulai);
+    const menitBatasHadir = toMinutes(jamBerangkatHadirSelesai);
+    const menitSelesai = toMinutes(jamBerangkatSelesai);
+
+    if (menitSekarang < menitMulai) {
+      return NextResponse.json(
+        {
+          error: `Absensi siswa dimulai pukul ${jamBerangkatMulai}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (menitSekarang > menitSelesai) {
+      return NextResponse.json(
+        {
+          error: `Absensi siswa sudah ditutup pukul ${jamBerangkatSelesai}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const status = menitSekarang > menitBatasHadir ? "TERLAMBAT" : "HADIR";
 
     const absensi = await prisma.absensiSiswa.create({
       data: {
@@ -73,7 +115,9 @@ export async function POST(req: Request) {
       },
       include: {
         siswa: {
-          include: { kelas: true },
+          include: {
+            kelas: true,
+          },
         },
       },
     });
@@ -81,7 +125,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       status,
-      waktu: now.toLocaleTimeString("id-ID"),
+      waktu: jamSekarang,
       siswa: {
         nama: siswa.nama,
         nis: siswa.nis,
@@ -92,6 +136,7 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("ABSENSI_SISWA_ERROR:", error);
+
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
