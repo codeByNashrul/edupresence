@@ -25,7 +25,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Megaphone,
   Clock,
   MapPin,
   BookOpen,
@@ -38,7 +37,6 @@ import {
   AlertCircle,
   CircleDashed,
   ArrowRight,
-  Activity,
 } from "lucide-react";
 import { GuruDashboardBody } from "@/components/dashboard/GuruDashboardBody";
 import { PelanggaranDashboardSection } from "@/components/dashboard/PelanggaranDashboardSection";
@@ -125,7 +123,11 @@ function buildCalendar(year: number, month: number) {
 }
 
 function formatDate(date: Date) {
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function getGreeting() {
@@ -412,13 +414,11 @@ function CalendarPanel({
 
   // Cek apakah suatu tanggal punya event
   function getEventOnDate(dateIso: string) {
-    const date = new Date(dateIso + "T12:00:00");
-    return kalenderEvents.filter((e) => {
-      const mulai = new Date(e.tanggalMulai);
-      const selesai = new Date(e.tanggalSelesai);
-      mulai.setHours(0, 0, 0, 0);
-      selesai.setHours(23, 59, 59, 999);
-      return date >= mulai && date <= selesai;
+    return kalenderEvents.filter((event) => {
+      const tanggalMulai = event.tanggalMulai.slice(0, 10);
+      const tanggalSelesai = event.tanggalSelesai.slice(0, 10);
+
+      return dateIso >= tanggalMulai && dateIso <= tanggalSelesai;
     });
   }
 
@@ -452,19 +452,23 @@ function CalendarPanel({
         <h2 className="font-bold text-gray-900 dark:text-gray-100">Kalender</h2>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={prevMonth}
+            aria-label="Bulan sebelumnya"
             className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
           >
-            ‹
+            <ChevronLeft size={16} />
           </button>
           <span className="text-sm text-gray-500 dark:text-gray-400 min-w-[120px] text-center">
             {monthLabel}
           </span>
           <button
+            type="button"
             onClick={nextMonth}
+            aria-label="Bulan berikutnya"
             className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
           >
-            ›
+            <ChevronRight size={16} />
           </button>
         </div>
       </div>
@@ -661,6 +665,7 @@ function AbsensiCard({
           >
             <Clock size={11} />
             {new Date(target.waktuScan).toLocaleTimeString("id-ID", {
+              timeZone: "Asia/Jakarta",
               hour: "2-digit",
               minute: "2-digit",
             })}
@@ -682,8 +687,8 @@ export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
+  const [selectedDate, setSelectedDate] = useState(() =>
+    formatDate(new Date()),
   );
   const [pengumuman, setPengumuman] = useState<PengumumanItem[]>([]);
   const [targets, setTargets] = useState<TargetAbsensi[]>([]);
@@ -696,34 +701,89 @@ export default function DashboardPage() {
   const isManagement = ["ADMIN", "PIMPINAN"].includes(role);
   const isStaff = role === "STAFF";
   const isGuru = role === "GURU";
-  const today = new Date().toISOString().split("T")[0];
+  const canScanAbsensi = isGuru || isStaff;
+  const today = formatDate(new Date());
   const isToday = selectedDate === today;
 
   async function fetchDashboard() {
     try {
       setLoading(true);
-      if (!isManagement) {
-        const targetRes = await fetch("/api/absensi/target");
-        const targetData = await targetRes.json();
-        setTargets(Array.isArray(targetData) ? targetData : []);
+
+      const [dashboardRes, pengumumanRes] = await Promise.all([
+        fetch(`/api/dashboard?tanggal=${selectedDate}`, {
+          cache: "no-store",
+        }),
+        fetch("/api/pengumuman", {
+          cache: "no-store",
+        }),
+      ]);
+
+      if (!dashboardRes.ok) {
+        throw new Error("Gagal mengambil data dashboard");
       }
+
+      const dashboardData = await dashboardRes.json();
+      setData(dashboardData);
+
+      if (pengumumanRes.ok) {
+        const pengumumanData = await pengumumanRes.json();
+
+        setPengumuman(Array.isArray(pengumumanData) ? pengumumanData : []);
+      } else {
+        setPengumuman([]);
+      }
+
+      /*
+       * Endpoint target absensi hanya menggambarkan target hari ini.
+       * Jangan tampilkan ketika kalender memilih tanggal lain.
+       */
+      if (canScanAbsensi && isToday) {
+        const targetRes = await fetch("/api/absensi/target", {
+          cache: "no-store",
+        });
+
+        if (targetRes.ok) {
+          const targetData = await targetRes.json();
+
+          setTargets(Array.isArray(targetData) ? targetData : []);
+        } else {
+          setTargets([]);
+        }
+      } else {
+        setTargets([]);
+      }
+
+      /*
+       * Catatan staff mengikuti tanggal yang sedang dipilih,
+       * bukan selalu tanggal hari ini.
+       */
       if (isStaff) {
-        const catatanRes = await fetch(`/api/catatan-harian?tanggal=${today}`);
-        const catatanData = await catatanRes.json();
-        setCatatanHarian(
-          Array.isArray(catatanData) && catatanData.length > 0
-            ? catatanData[0]
-            : null,
+        const catatanRes = await fetch(
+          `/api/catatan-harian?tanggal=${selectedDate}`,
+          {
+            cache: "no-store",
+          },
         );
+
+        if (catatanRes.ok) {
+          const catatanData = await catatanRes.json();
+
+          setCatatanHarian(
+            Array.isArray(catatanData) && catatanData.length > 0
+              ? catatanData[0]
+              : null,
+          );
+        } else {
+          setCatatanHarian(null);
+        }
+      } else {
+        setCatatanHarian(null);
       }
-      const res = await fetch(`/api/dashboard?tanggal=${selectedDate}`);
-      const json = await res.json();
-      setData(json);
-      const pengumumanRes = await fetch("/api/pengumuman");
-      const pengumumanData = await pengumumanRes.json();
-      setPengumuman(Array.isArray(pengumumanData) ? pengumumanData : []);
     } catch (error) {
-      console.error(error);
+      console.error("FETCH_DASHBOARD_ERROR:", error);
+      setData(null);
+      setTargets([]);
+      setCatatanHarian(null);
     } finally {
       setLoading(false);
     }
@@ -741,8 +801,14 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    if (sessionStatus === "authenticated") fetchDashboard();
-  }, [sessionStatus, selectedDate, isStaff]);
+    if (sessionStatus === "authenticated") {
+      fetchDashboard();
+    }
+
+    if (sessionStatus === "unauthenticated") {
+      setLoading(false);
+    }
+  }, [sessionStatus, selectedDate, isStaff, isGuru, isManagement, isToday]);
 
   if (loading) {
     return (
@@ -1042,7 +1108,7 @@ export default function DashboardPage() {
                 Grafik Kehadiran
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                Guru, staff & siswa — absen hari ini
+                Guru, staff & siswa — {formatTanggalPanjang(selectedDate)}{" "}
               </p>
               <div className="h-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1094,7 +1160,9 @@ export default function DashboardPage() {
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/20">
               <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Clock size={18} className="text-violet-600" />
-                Jadwal Hari Ini
+                {isToday
+                  ? "Jadwal Hari Ini"
+                  : `Jadwal ${formatTanggalPanjang(selectedDate)}`}
               </h2>
               <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">
                 {jadwalDashboard.length} jadwal
@@ -1239,31 +1307,36 @@ export default function DashboardPage() {
                 </p>
               )}
             </div>
-            <Link
-              href="/scan"
-              className="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-50 transition shadow-lg shrink-0"
-            >
-              <ScanLine size={18} />
-              Scan Absensi
-            </Link>
+            {canScanAbsensi && isToday && (
+              <Link
+                href="/scan"
+                className="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-50 transition shadow-lg shrink-0"
+              >
+                <ScanLine size={18} />
+                Scan Absensi
+              </Link>
+            )}
           </div>
         </div>
 
         {/* ── Absensi harian ── */}
-        <div className="grid sm:grid-cols-2 gap-4 mb-6">
-          <AbsensiCard
-            title="Absen Berangkat"
-            target={absenBerangkat}
-            icon={Sun}
-            href="/scan"
-          />
-          <AbsensiCard
-            title="Absen Pulang"
-            target={absenPulang}
-            icon={Sunset}
-            href="/scan"
-          />
-        </div>
+        {canScanAbsensi && isToday && (
+          <div className="grid sm:grid-cols-2 gap-4 mb-6">
+            <AbsensiCard
+              title="Absen Berangkat"
+              target={absenBerangkat}
+              icon={Sun}
+              href="/scan"
+            />
+
+            <AbsensiCard
+              title="Absen Pulang"
+              target={absenPulang}
+              icon={Sunset}
+              href="/scan"
+            />
+          </div>
+        )}
 
         {isGuru && <UpcomingEventsInline />}
 
@@ -1375,7 +1448,9 @@ export default function DashboardPage() {
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/20">
               <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Clock size={18} className="text-violet-600" />
-                Jadwal Mengajar Hari Ini
+                {isToday
+                  ? "Jadwal Mengajar Hari Ini"
+                  : `Jadwal Mengajar ${formatTanggalPanjang(selectedDate)}`}
               </h2>
               <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">
                 {jadwalDashboard.length} slot
