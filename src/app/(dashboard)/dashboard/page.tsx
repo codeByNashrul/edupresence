@@ -172,11 +172,10 @@ function StatCard({
 }) {
   const content = (
     <div
-      className={`relative h-full overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient} ${
-        href
-          ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-xl"
-          : ""
-      }`}
+      className={`relative h-full overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient} ${href
+        ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-xl"
+        : ""
+        }`}
     >
       <div className="absolute -right-3 -top-3 opacity-20">
         <Icon size={72} strokeWidth={1.5} />
@@ -578,13 +577,12 @@ function CalendarPanel({
             <button
               key={i}
               onClick={() => onSelectDate(iso)}
-              className={`relative flex flex-col items-center justify-start pt-1 pb-1 gap-0.5 rounded-xl text-sm font-medium transition aspect-square ${
-                active
-                  ? "bg-indigo-600 text-white"
-                  : isToday
-                    ? "border border-indigo-400 text-indigo-600 dark:text-indigo-400"
-                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
-              }`}
+              className={`relative flex flex-col items-center justify-start pt-1 pb-1 gap-0.5 rounded-xl text-sm font-medium transition aspect-square ${active
+                ? "bg-indigo-600 text-white"
+                : isToday
+                  ? "border border-indigo-400 text-indigo-600 dark:text-indigo-400"
+                  : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+                }`}
             >
               <span>{day}</span>
               {dots.length > 0 && (
@@ -592,11 +590,10 @@ function CalendarPanel({
                   {dots.map((e, di) => (
                     <span
                       key={di}
-                      className={`w-1 h-1 rounded-full ${
-                        active
-                          ? "bg-white/80"
-                          : (TIPE_DOT[e.tipe] ?? "bg-gray-400")
-                      }`}
+                      className={`w-1 h-1 rounded-full ${active
+                        ? "bg-white/80"
+                        : (TIPE_DOT[e.tipe] ?? "bg-gray-400")
+                        }`}
                     />
                   ))}
                 </div>
@@ -767,6 +764,7 @@ export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState("");
   const [selectedDate, setSelectedDate] = useState(() =>
     formatDate(new Date()),
   );
@@ -786,87 +784,177 @@ export default function DashboardPage() {
   const isToday = selectedDate === today;
 
   async function fetchDashboard() {
-    try {
-      setLoading(true);
+    setLoading(true);
+    setDashboardError("");
 
-      const [dashboardRes, pengumumanRes] = await Promise.all([
-        fetch(`/api/dashboard?tanggal=${selectedDate}`, {
+    /*
+     * Data dashboard adalah request utama.
+     * Hanya kegagalan endpoint ini yang boleh menggagalkan halaman.
+     */
+    try {
+      const dashboardRes = await fetch(
+        `/api/dashboard?tanggal=${selectedDate}`,
+        {
           cache: "no-store",
-        }),
-        fetch("/api/pengumuman", {
-          cache: "no-store",
-        }),
-      ]);
+          credentials: "include",
+        },
+      );
+
+      const dashboardData = await dashboardRes
+        .json()
+        .catch(() => null);
 
       if (!dashboardRes.ok) {
-        throw new Error("Gagal mengambil data dashboard");
-      }
-
-      const dashboardData = await dashboardRes.json();
-      setData(dashboardData);
-
-      if (pengumumanRes.ok) {
-        const pengumumanData = await pengumumanRes.json();
-
-        setPengumuman(Array.isArray(pengumumanData) ? pengumumanData : []);
-      } else {
-        setPengumuman([]);
-      }
-
-      /*
-       * Endpoint target absensi hanya menggambarkan target hari ini.
-       * Jangan tampilkan ketika kalender memilih tanggal lain.
-       */
-      if (canScanAbsensi && isToday) {
-        const targetRes = await fetch("/api/absensi/target", {
-          cache: "no-store",
-        });
-
-        if (targetRes.ok) {
-          const targetData = await targetRes.json();
-
-          setTargets(Array.isArray(targetData) ? targetData : []);
-        } else {
-          setTargets([]);
-        }
-      } else {
-        setTargets([]);
-      }
-
-      /*
-       * Catatan staff mengikuti tanggal yang sedang dipilih,
-       * bukan selalu tanggal hari ini.
-       */
-      if (isStaff) {
-        const catatanRes = await fetch(
-          `/api/catatan-harian?tanggal=${selectedDate}`,
-          {
-            cache: "no-store",
-          },
+        throw new Error(
+          dashboardData?.error ??
+          `Gagal mengambil dashboard (${dashboardRes.status})`,
         );
-
-        if (catatanRes.ok) {
-          const catatanData = await catatanRes.json();
-
-          setCatatanHarian(
-            Array.isArray(catatanData) && catatanData.length > 0
-              ? catatanData[0]
-              : null,
-          );
-        } else {
-          setCatatanHarian(null);
-        }
-      } else {
-        setCatatanHarian(null);
       }
+
+      if (
+        !dashboardData ||
+        typeof dashboardData !== "object" ||
+        "error" in dashboardData
+      ) {
+        throw new Error(
+          dashboardData?.error ??
+          "Respons dashboard tidak valid",
+        );
+      }
+
+      setData(dashboardData as DashboardData);
     } catch (error) {
-      console.error("FETCH_DASHBOARD_ERROR:", error);
+      console.error("DASHBOARD_MAIN_ERROR:", error);
+
       setData(null);
       setTargets([]);
       setCatatanHarian(null);
-    } finally {
+
+      setDashboardError(
+        error instanceof Error
+          ? error.message
+          : "Gagal mengambil data dashboard",
+      );
+
       setLoading(false);
+      return;
     }
+
+    /*
+     * Dashboard utama sudah berhasil.
+     * Request tambahan tidak boleh membuat seluruh halaman gagal.
+     */
+    setLoading(false);
+
+    const optionalRequests: Promise<void>[] = [];
+
+    // Pengumuman
+    optionalRequests.push(
+      (async () => {
+        try {
+          const res = await fetch("/api/pengumuman", {
+            cache: "no-store",
+            credentials: "include",
+          });
+
+          if (!res.ok) {
+            setPengumuman([]);
+            return;
+          }
+
+          const result = await res.json();
+
+          setPengumuman(
+            Array.isArray(result) ? result : [],
+          );
+        } catch (error) {
+          console.error(
+            "DASHBOARD_PENGUMUMAN_ERROR:",
+            error,
+          );
+
+          setPengumuman([]);
+        }
+      })(),
+    );
+
+    // Target absensi
+    if (canScanAbsensi && isToday) {
+      optionalRequests.push(
+        (async () => {
+          try {
+            const res = await fetch(
+              "/api/absensi/target",
+              {
+                cache: "no-store",
+                credentials: "include",
+              },
+            );
+
+            if (!res.ok) {
+              setTargets([]);
+              return;
+            }
+
+            const result = await res.json();
+
+            setTargets(
+              Array.isArray(result) ? result : [],
+            );
+          } catch (error) {
+            console.error(
+              "DASHBOARD_TARGET_ERROR:",
+              error,
+            );
+
+            setTargets([]);
+          }
+        })(),
+      );
+    } else {
+      setTargets([]);
+    }
+
+    // Catatan harian staff
+    if (isStaff) {
+      optionalRequests.push(
+        (async () => {
+          try {
+            const res = await fetch(
+              `/api/catatan-harian?tanggal=${selectedDate}`,
+              {
+                cache: "no-store",
+                credentials: "include",
+              },
+            );
+
+            if (!res.ok) {
+              setCatatanHarian(null);
+              return;
+            }
+
+            const result = await res.json();
+
+            setCatatanHarian(
+              Array.isArray(result) && result.length > 0
+                ? result[0]
+                : null,
+            );
+          } catch (error) {
+            console.error(
+              "DASHBOARD_CATATAN_ERROR:",
+              error,
+            );
+
+            setCatatanHarian(null);
+          }
+        })(),
+      );
+    } else {
+      setCatatanHarian(null);
+    }
+
+    await Promise.allSettled(optionalRequests);
   }
 
   async function simpanPengumuman() {
@@ -900,11 +988,28 @@ export default function DashboardPage() {
 
   if (!data || "error" in data) {
     return (
-      <div className="max-w-lg mx-auto p-8 text-center rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-        <AlertCircle className="mx-auto text-amber-500 mb-3" size={40} />
-        <p className="text-gray-600 dark:text-gray-400">
-          Gagal memuat dashboard. Silakan muat ulang halaman.
+      <div className="mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+        <AlertCircle
+          className="mx-auto mb-3 text-amber-500"
+          size={40}
+        />
+
+        <p className="font-semibold text-gray-900 dark:text-gray-100">
+          Gagal memuat dashboard
         </p>
+
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {dashboardError ||
+            "Terjadi gangguan saat mengambil data dashboard."}
+        </p>
+
+        <button
+          type="button"
+          onClick={fetchDashboard}
+          className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+        >
+          Muat Ulang
+        </button>
       </div>
     );
   }
@@ -1019,7 +1124,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-indigo-200">Kehadiran pegawai</p>
                     <p className="text-lg font-bold">
-                      {pct(guruTercatat + staffTercatat, totalPegawai)}% %
+                      {pct(guruTercatat + staffTercatat, totalPegawai)}%
                     </p>
                   </div>
                 </div>
@@ -1067,9 +1172,8 @@ export default function DashboardPage() {
             <StatCard
               label="Kehadiran Guru"
               value={guruTercatat}
-              sub={`${data.guruHadir ?? 0} hadir · ${
-                data.guruTerlambat ?? 0
-              } terlambat`}
+              sub={`${data.guruHadir ?? 0} hadir · ${data.guruTerlambat ?? 0
+                } terlambat`}
               icon={UserCheck}
               gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/25"
               accent="text-emerald-100"
@@ -1077,9 +1181,8 @@ export default function DashboardPage() {
             <StatCard
               label="Kehadiran Staff"
               value={staffTercatat}
-              sub={`${data.staffHadir ?? 0} hadir · ${
-                data.staffTerlambat ?? 0
-              } terlambat`}
+              sub={`${data.staffHadir ?? 0} hadir · ${data.staffTerlambat ?? 0
+                } terlambat`}
               icon={Users}
               gradient="bg-gradient-to-br from-sky-500 to-blue-600 shadow-sky-500/25"
               accent="text-sky-100"
@@ -1087,9 +1190,8 @@ export default function DashboardPage() {
             <StatCard
               label="Kehadiran Siswa"
               value={siswaTercatat}
-              sub={`${data.siswaHadir ?? 0} hadir · ${
-                data.siswaTerlambat ?? 0
-              } terlambat`}
+              sub={`${data.siswaHadir ?? 0} hadir · ${data.siswaTerlambat ?? 0
+                } terlambat`}
               icon={UserCheck}
               gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/25"
               accent="text-orange-100"
