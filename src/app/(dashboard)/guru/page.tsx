@@ -16,6 +16,7 @@ import {
   Info,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
 
 interface Guru {
   id: string;
@@ -143,11 +144,10 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition ${
-              danger
-                ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-md shadow-red-500/20"
-                : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-500/20"
-            }`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition ${danger
+              ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-md shadow-red-500/20"
+              : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-500/20"
+              }`}
           >
             {confirmLabel}
           </button>
@@ -158,7 +158,7 @@ function ConfirmModal({
 }
 
 // ─── Skeleton Row ──────────────────────────────────────────────────────────────
-function SkeletonRows() {
+function SkeletonRows({ showActions }: { showActions: boolean }) {
   return (
     <>
       {[1, 2, 3, 4, 5].map((i) => (
@@ -169,18 +169,23 @@ function SkeletonRows() {
               <div className="h-4 w-36 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
             </div>
           </td>
+
           <td className="px-5 py-4">
             <div className="h-6 w-28 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
           </td>
+
           <td className="px-5 py-4">
             <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
           </td>
-          <td className="px-5 py-4">
-            <div className="flex justify-center gap-2">
-              <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-              <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-            </div>
-          </td>
+
+          {showActions && (
+            <td className="px-5 py-4">
+              <div className="flex justify-center gap-2">
+                <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+                <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+              </div>
+            </td>
+          )}
         </tr>
       ))}
     </>
@@ -189,6 +194,13 @@ function SkeletonRows() {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function GuruPage() {
+  const { data: session, status: sessionStatus } = useSession();
+
+  const role = session?.user?.role ?? "";
+
+  const canViewGuru = ["ADMIN", "PIMPINAN", "GURU", "STAFF"].includes(role);
+
+  const canManageGuru = role === "ADMIN";
   const [guru, setGuru] = useState<Guru[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -211,21 +223,50 @@ export default function GuruPage() {
     confirmLabel?: string;
     danger?: boolean;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+  }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
   const { toasts, show: showToast, remove: removeToast } = useToast();
 
-  async function fetchGuru() {
-    setLoading(true);
-    const res = await fetch("/api/guru");
-    const data = await res.json();
-    setGuru(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }
+  const fetchGuru = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const res = await fetch("/api/guru", {
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error ?? "Gagal mengambil data guru");
+      }
+
+      setGuru(Array.isArray(result) ? result : []);
+    } catch (error) {
+      setGuru([]);
+
+      showToast(
+        error instanceof Error ? error.message : "Gagal mengambil data guru",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    fetchGuru();
-  }, []);
+    if (sessionStatus === "authenticated" && canViewGuru) {
+      void fetchGuru();
+      return;
+    }
+
+    if (
+      sessionStatus === "unauthenticated" ||
+      (sessionStatus === "authenticated" && !canViewGuru)
+    ) {
+      setLoading(false);
+    }
+  }, [sessionStatus, canViewGuru, fetchGuru]);
 
   // ── Filter ──
   const filtered = guru.filter(
@@ -236,6 +277,8 @@ export default function GuruPage() {
 
   // ── Form helpers ──
   function openTambah() {
+    if (!canManageGuru) return;
+
     setEditData(null);
     setForm({ nama: "", nip: "", noWa: "", password: "" });
     setFormError("");
@@ -243,6 +286,8 @@ export default function GuruPage() {
   }
 
   function openEdit(g: Guru) {
+    if (!canManageGuru) return;
+
     setEditData(g);
     setForm({ nama: g.nama, nip: g.nip, noWa: g.noWa ?? "", password: "" });
     setFormError("");
@@ -251,55 +296,98 @@ export default function GuruPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setFormError("");
-    setFormLoading(true);
 
-    const method = editData ? "PUT" : "POST";
-    const url = editData ? `/api/guru/${editData.id}` : "/api/guru";
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    setFormLoading(false);
-
-    if (!res.ok) {
-      const data = await res.json();
-      setFormError(data.error ?? "Terjadi kesalahan");
+    if (!canManageGuru) {
+      showToast("Hanya admin yang dapat mengubah data guru", "error");
       return;
     }
 
-    setShowForm(false);
-    showToast(
-      editData
-        ? `Data ${form.nama} berhasil diperbarui`
-        : `${form.nama} berhasil ditambahkan`,
-      "success",
-    );
-    fetchGuru();
+    try {
+      setFormError("");
+      setFormLoading(true);
+
+      const method = editData ? "PUT" : "POST";
+      const url = editData ? `/api/guru/${editData.id}` : "/api/guru";
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setFormError(result.error ?? "Terjadi kesalahan");
+        return;
+      }
+
+      setShowForm(false);
+
+      showToast(
+        editData
+          ? `Data ${form.nama} berhasil diperbarui`
+          : `${form.nama} berhasil ditambahkan`,
+        "success",
+      );
+
+      await fetchGuru();
+    } catch (error) {
+      console.error("SAVE_GURU_ERROR:", error);
+
+      setFormError("Gagal menyimpan data guru");
+    } finally {
+      setFormLoading(false);
+    }
   }
 
   // ── Delete single ──
   function handleDelete(g: Guru) {
+    if (!canManageGuru) return;
+
     setConfirm({
       open: true,
       title: "Nonaktifkan Guru",
       description: `Apakah kamu yakin ingin menonaktifkan ${g.nama}? Data dapat dipulihkan oleh administrator.`,
       confirmLabel: "Ya, Nonaktifkan",
       danger: true,
+
       onConfirm: async () => {
-        setConfirm((prev) => ({ ...prev, open: false }));
-        await fetch(`/api/guru/${g.id}`, { method: "DELETE" });
-        showToast(`${g.nama} berhasil dinonaktifkan`, "info");
-        fetchGuru();
+        setConfirm((prev) => ({
+          ...prev,
+          open: false,
+        }));
+
+        try {
+          const res = await fetch(`/api/guru/${g.id}`, {
+            method: "DELETE",
+          });
+
+          const result = await res.json();
+
+          if (!res.ok) {
+            throw new Error(result.error ?? "Gagal menonaktifkan guru");
+          }
+
+          showToast(`${g.nama} berhasil dinonaktifkan`, "info");
+
+          await fetchGuru();
+        } catch (error) {
+          showToast(
+            error instanceof Error ? error.message : "Gagal menonaktifkan guru",
+            "error",
+          );
+        }
       },
     });
   }
 
   // ── Delete all ──
   function handleDeleteAll() {
+    if (!canManageGuru) return;
+
     setConfirm({
       open: true,
       title: "Hapus Semua Data Guru",
@@ -307,92 +395,198 @@ export default function GuruPage() {
         "Tindakan ini akan menonaktifkan SEMUA data guru. Apakah kamu benar-benar yakin?",
       confirmLabel: "Hapus Semua",
       danger: true,
+
       onConfirm: async () => {
-        setConfirm((prev) => ({ ...prev, open: false }));
-        await fetch("/api/guru/delete-all", { method: "DELETE" });
-        showToast("Semua data guru telah dinonaktifkan", "info");
-        fetchGuru();
+        setConfirm((prev) => ({
+          ...prev,
+          open: false,
+        }));
+
+        try {
+          const res = await fetch("/api/guru/delete-all", {
+            method: "DELETE",
+          });
+
+          const result = await res.json();
+
+          if (!res.ok) {
+            throw new Error(result.error ?? "Gagal menonaktifkan semua guru");
+          }
+
+          showToast("Semua data guru telah dinonaktifkan", "info");
+
+          await fetchGuru();
+        } catch (error) {
+          showToast(
+            error instanceof Error
+              ? error.message
+              : "Gagal menonaktifkan semua guru",
+            "error",
+          );
+        }
       },
     });
   }
 
   // ── Import CSV ──
   async function handleImportCsv(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!canManageGuru) {
+      e.target.value = "";
+
+      showToast("Hanya admin yang dapat mengimpor data guru", "error");
+
+      return;
+    }
+
     const file = e.target.files?.[0];
+
     if (!file) return;
 
-    const text = await file.text();
-    const lines = text.trim().split("\n");
-    const headers = lines[0].split(";").map((h) => h.trim().toLowerCase());
+    try {
+      const text = await file.text();
+      const lines = text.trim().split(/\r?\n/);
 
-    const requiredCols = ["nama", "nip", "password"];
-    const missingCols = requiredCols.filter((c) => !headers.includes(c));
-    if (missingCols.length > 0) {
-      showToast(
-        `Kolom wajib tidak ditemukan: ${missingCols.join(", ")}`,
-        "error",
+      if (lines.length < 2) {
+        showToast("File CSV tidak berisi data", "error");
+        return;
+      }
+
+      const headers = lines[0]
+        .split(";")
+        .map((header) => header.trim().toLowerCase());
+
+      const requiredCols = ["nama", "nip", "password"];
+
+      const missingCols = requiredCols.filter(
+        (column) => !headers.includes(column),
       );
-      e.target.value = "";
-      return;
-    }
 
-    const rows = lines
-      .slice(1)
-      .map((line) => {
-        const values = line.split(";").map((v) => v.trim());
-        const row: Record<string, string> = {};
-        headers.forEach((h, i) => {
-          row[h] = values[i] ?? "";
-        });
-        return row;
-      })
-      .filter((r) => r.nama && r.nip);
+      if (missingCols.length > 0) {
+        showToast(
+          `Kolom wajib tidak ditemukan: ${missingCols.join(", ")}`,
+          "error",
+        );
+        return;
+      }
 
-    if (rows.length === 0) {
-      showToast("Tidak ada data valid di CSV", "error");
-      e.target.value = "";
-      return;
-    }
+      const rows = lines
+        .slice(1)
+        .map((line) => {
+          const values = line.split(";").map((value) => value.trim());
 
-    const res = await fetch("/api/guru/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows }),
-    });
+          const row: Record<string, string> = {};
 
-    const data = await res.json();
+          headers.forEach((header, index) => {
+            row[header] = values[index] ?? "";
+          });
 
-    if (!res.ok) {
-      showToast(data.error ?? "Gagal import CSV", "error");
-    } else {
+          return row;
+        })
+        .filter((row) => row.nama && row.nip && row.password);
+
+      if (rows.length === 0) {
+        showToast("Tidak ada data valid di CSV", "error");
+        return;
+      }
+
+      const res = await fetch("/api/guru/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rows }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error ?? "Gagal mengimpor CSV");
+      }
+
       showToast(
-        `Import selesai — ${data.berhasil} berhasil, ${data.gagal} gagal`,
+        `Import selesai — ${result.berhasil ?? 0} berhasil, ${result.gagal ?? 0} gagal`,
         "success",
       );
-      fetchGuru();
-    }
 
-    e.target.value = "";
+      await fetchGuru();
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Gagal mengimpor CSV",
+        "error",
+      );
+    } finally {
+      e.target.value = "";
+    }
   }
 
   // ── Export CSV ──
   function exportCsv() {
+    if (!canManageGuru) return;
     if (guru.length === 0) return;
+
+    const escapeCsv = (value: string | null) => {
+      const text = value ?? "";
+
+      if (text.includes(";") || text.includes('"') || text.includes("\n")) {
+        return `"${text.replaceAll('"', '""')}"`;
+      }
+
+      return text;
+    };
+
     const headers = ["Nama", "NIP", "No. WhatsApp"];
-    const rows = guru.map((g) => [g.nama, g.nip, g.noWa ?? ""]);
-    const csv = [headers, ...rows].map((r) => r.join(";")).join("\n");
+
+    const rows = guru.map((item) => [
+      escapeCsv(item.nama),
+      escapeCsv(item.nip),
+      escapeCsv(item.noWa),
+    ]);
+
+    const csv = [headers, ...rows].map((row) => row.join(";")).join("\n");
+
     const blob = new Blob(["\uFEFF" + csv], {
       type: "text/csv;charset=utf-8;",
     });
+
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "data-guru.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = "data-guru.csv";
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+
     URL.revokeObjectURL(url);
+
     showToast(`${guru.length} data guru berhasil diekspor`, "success");
+  }
+
+  if (sessionStatus === "loading") {
+    return (
+      <div className="space-y-4">
+        <div className="h-20 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+        <div className="h-80 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (sessionStatus === "unauthenticated" || !canViewGuru) {
+    return (
+      <div className="max-w-lg mx-auto rounded-2xl border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30 p-8 text-center">
+        <AlertTriangle size={40} className="mx-auto mb-3 text-red-500" />
+
+        <h1 className="text-lg font-bold text-red-700 dark:text-red-300">
+          Akses Ditolak
+        </h1>
+
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+          Anda tidak memiliki akses ke data guru.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -410,68 +604,118 @@ export default function GuruPage() {
       />
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Manajemen Guru
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Kelola data guru sekolah
-          </p>
-        </div>
+      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 p-6 text-white shadow-lg shadow-indigo-500/20">
+        {/* Dekorasi background */}
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-white/5 blur-xl" />
 
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={handleDeleteAll}
-            disabled={guru.length === 0}
-            className="flex items-center gap-2 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition"
-          >
-            <Trash2 size={16} />
-            Hapus Semua
-          </button>
+        <div className="relative z-10">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            {/* Judul */}
+            <div>
+              <span className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-sm">
+                <Users size={14} className="mr-1" />
+                Data Kepegawaian
+              </span>
 
-          <label className="flex items-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition">
-            <Upload size={16} />
-            Import CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleImportCsv}
-              className="hidden"
-            />
-          </label>
+              <h1 className="text-2xl font-bold tracking-tight text-white">
+                {canManageGuru
+                  ? "Manajemen Guru"
+                  : "Data Guru"}
+              </h1>
 
-          <button
-            onClick={exportCsv}
-            disabled={guru.length === 0}
-            className="flex items-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
-          >
-            <Download size={16} />
-            Export CSV
-          </button>
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-indigo-100">
+                {canManageGuru
+                  ? "Kelola data guru aktif di sekolah."
+                  : "Lihat daftar guru aktif di sekolah."}
+              </p>
+            </div>
 
-          <button
-            onClick={openTambah}
-            className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-indigo-500/20 transition"
-          >
-            <Plus size={16} />
-            Tambah Guru
-          </button>
+            {/* Tombol admin */}
+            {canManageGuru && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteAll}
+                  disabled={guru.length === 0}
+                  className="flex items-center gap-2 rounded-xl border border-red-300/50 bg-red-500/15 px-4 py-2 text-sm font-medium text-red-100 backdrop-blur-sm transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 size={16} />
+                  Hapus Semua
+                </button>
+
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20">
+                  <Upload size={16} />
+                  Import CSV
+
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleImportCsv}
+                    className="hidden"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  disabled={guru.length === 0}
+                  className="flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  Export CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openTambah}
+                  className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-md transition hover:bg-indigo-50"
+                >
+                  <Plus size={16} />
+                  Tambah Guru
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mode lihat saja */}
+          {!canManageGuru && (
+            <div className="mt-5 flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white backdrop-blur-sm">
+              <Info
+                size={18}
+                className="mt-0.5 shrink-0 text-indigo-100"
+              />
+
+              <div>
+                <p className="font-semibold">
+                  Mode lihat saja
+                </p>
+
+                <p className="mt-0.5 text-xs leading-relaxed text-indigo-100">
+                  Data guru hanya dapat ditambah, diubah,
+                  atau dinonaktifkan oleh admin.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Info format CSV ── */}
-      <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
-        <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
-        <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-          nama;nip;noWa;password
-        </code>{" "}
-        — kolom{" "}
-        <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-          noWa
-        </code>{" "}
-        opsional.
-      </div>
+
+      {canManageGuru && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
+          <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
+          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+            nama;nip;noWa;password
+          </code>{" "}
+          — kolom{" "}
+          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+            noWa
+          </code>{" "}
+          opsional.
+        </div>
+      )}
 
       {/* ── Search + Stats Bar ── */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -529,13 +773,15 @@ export default function GuruPage() {
                   <th className="text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
                     No. WhatsApp
                   </th>
-                  <th className="text-center px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
-                    Aksi
-                  </th>
+                  {canManageGuru && (
+                    <th className="text-center px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
+                      Aksi
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                <SkeletonRows />
+                <SkeletonRows showActions={canManageGuru} />
               </tbody>
             </table>
           </div>
@@ -581,9 +827,11 @@ export default function GuruPage() {
                   <th className="text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
                     No. WhatsApp
                   </th>
-                  <th className="text-center px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
-                    Aksi
-                  </th>
+                  {canManageGuru && (
+                    <th className="text-center px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
+                      Aksi
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -617,24 +865,26 @@ export default function GuruPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEdit(g)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/70 text-xs font-semibold transition"
-                        >
-                          <Pen size={14} />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(g)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/70 text-xs font-semibold transition"
-                        >
-                          <Trash2 size={14} />
-                          Hapus
-                        </button>
-                      </div>
-                    </td>
+                    {canManageGuru && (
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openEdit(g)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/70 text-xs font-semibold transition"
+                          >
+                            <Pen size={14} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(g)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/70 text-xs font-semibold transition"
+                          >
+                            <Trash2 size={14} />
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -644,7 +894,7 @@ export default function GuruPage() {
       </div>
 
       {/* ── Modal Form ── */}
-      {showForm && (
+      {canManageGuru && showForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
             {/* Header */}

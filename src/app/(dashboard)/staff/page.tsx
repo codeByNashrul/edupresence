@@ -13,8 +13,10 @@ import {
   Info,
   Briefcase,
   Upload,
+  UserCheck,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
 
 interface Staff {
   id: string;
@@ -149,37 +151,66 @@ function ConfirmModal({
 }
 
 // ─── Skeleton ───────────────────────────────────────────────────────────────────
-function SkeletonRows() {
+function SkeletonRows({
+  showActions,
+}: {
+  showActions: boolean;
+}) {
   return (
     <>
       {[1, 2, 3, 4, 5].map((i) => (
-        <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
+        <tr
+          key={i}
+          className="border-b border-gray-100 dark:border-gray-800"
+        >
           <td className="px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse shrink-0" />
               <div className="h-4 w-36 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
             </div>
           </td>
+
           <td className="px-5 py-4">
             <div className="h-6 w-28 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
           </td>
+
           <td className="px-5 py-4">
             <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
           </td>
-          <td className="px-5 py-4">
-            <div className="flex justify-center gap-2">
-              <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-              <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-            </div>
-          </td>
+
+          {showActions && (
+            <td className="px-5 py-4">
+              <div className="flex justify-center gap-2">
+                <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+                <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+              </div>
+            </td>
+          )}
         </tr>
       ))}
     </>
   );
 }
 
+
 // ─── Main ───────────────────────────────────────────────────────────────────────
 export default function StaffPage() {
+  const {
+    data: session,
+    status: sessionStatus,
+  } = useSession();
+
+  const role = session?.user?.role ?? "";
+
+  const canViewStaff = [
+    "ADMIN",
+    "PIMPINAN",
+    "GURU",
+    "STAFF",
+  ].includes(role);
+
+  const canManageStaff = role === "ADMIN";
+
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -200,21 +231,64 @@ export default function StaffPage() {
     confirmLabel?: string;
     danger?: boolean;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+  }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
   const { toasts, show: showToast, remove: removeToast } = useToast();
 
-  async function fetchStaff() {
-    setLoading(true);
-    const res = await fetch("/api/staff");
-    const data = await res.json();
-    setStaff(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }
+  const fetchStaff = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const res = await fetch("/api/staff", {
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          result.error ?? "Gagal mengambil data staff",
+        );
+      }
+
+      setStaff(Array.isArray(result) ? result : []);
+    } catch (error) {
+      setStaff([]);
+
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Gagal mengambil data staff",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    fetchStaff();
-  }, []);
+    if (
+      sessionStatus === "authenticated" &&
+      canViewStaff
+    ) {
+      void fetchStaff();
+      return;
+    }
+
+    if (
+      sessionStatus === "unauthenticated" ||
+      (
+        sessionStatus === "authenticated" &&
+        !canViewStaff
+      )
+    ) {
+      setLoading(false);
+    }
+  }, [
+    sessionStatus,
+    canViewStaff,
+    fetchStaff,
+  ]);
 
   const filtered = staff.filter(
     (s) =>
@@ -223,6 +297,7 @@ export default function StaffPage() {
   );
 
   function openTambah() {
+    if (!canManageStaff) return;
     setEditData(null);
     setForm({ nama: "", nip: "", noWa: "", password: "" });
     setFormError("");
@@ -230,6 +305,7 @@ export default function StaffPage() {
   }
 
   function openEdit(s: Staff) {
+    if (!canManageStaff) return;
     setEditData(s);
     setForm({ nama: s.nama, nip: s.nip, noWa: s.noWa ?? "", password: "" });
     setFormError("");
@@ -238,6 +314,11 @@ export default function StaffPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!canManageStaff) {
+      showToast("Hanya admin yang dapat mengubah data staff", "error");
+      return;
+    }
     setFormError("");
     setFormLoading(true);
 
@@ -269,6 +350,7 @@ export default function StaffPage() {
   }
 
   function handleDelete(s: Staff) {
+    if (!canManageStaff) return;
     setConfirm({
       open: true,
       title: "Nonaktifkan Staff",
@@ -285,6 +367,7 @@ export default function StaffPage() {
   }
 
   function handleDeleteAll() {
+    if (!canManageStaff) return;
     setConfirm({
       open: true,
       title: "Hapus Semua Staff",
@@ -302,6 +385,10 @@ export default function StaffPage() {
   }
 
   async function handleImportCsv(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!canManageStaff) {
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -358,6 +445,7 @@ export default function StaffPage() {
   }
 
   function exportCsv() {
+    if (!canManageStaff) return;
     if (staff.length === 0) return;
     const headers = ["Nama", "NIP", "No. WhatsApp"];
     const rows = staff.map((s) => [s.nama, s.nip, s.noWa ?? ""]);
@@ -379,6 +467,37 @@ export default function StaffPage() {
   const thClass =
     "text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider";
 
+  if (sessionStatus === "loading") {
+    return (
+      <div className="space-y-4">
+        <div className="h-20 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+        <div className="h-80 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (
+    sessionStatus === "unauthenticated" ||
+    !canViewStaff
+  ) {
+    return (
+      <div className="max-w-lg mx-auto rounded-2xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/50 dark:bg-red-950/30">
+        <AlertTriangle
+          size={40}
+          className="mx-auto mb-3 text-red-500"
+        />
+
+        <h1 className="text-lg font-bold text-red-700 dark:text-red-300">
+          Akses Ditolak
+        </h1>
+
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+          Anda tidak memiliki akses ke data staff.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <Toast toasts={toasts} remove={removeToast} />
@@ -393,64 +512,119 @@ export default function StaffPage() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Manajemen Staff
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Kelola data staff sekolah
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={handleDeleteAll}
-            disabled={staff.length === 0}
-            className="flex items-center gap-2 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition"
-          >
-            <Trash2 size={16} />
-            Hapus Semua
-          </button>
-          <label className="flex items-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition">
-            <Upload size={16} />
-            Import CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleImportCsv}
-              className="hidden"
-            />
-          </label>
-          <button
-            onClick={exportCsv}
-            disabled={staff.length === 0}
-            className="flex items-center gap-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
-          >
-            <Download size={16} />
-            Export CSV
-          </button>
-          <button
-            onClick={openTambah}
-            className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-indigo-500/20 transition"
-          >
-            <Plus size={16} />
-            Tambah Staff
-          </button>
+      {/* ── Header ── */}
+      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-700 to-indigo-700 p-6 text-white shadow-lg shadow-violet-500/20">
+        {/* Dekorasi background */}
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-white/5 blur-xl" />
+
+        <div className="relative z-10">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            {/* Judul */}
+            <div>
+              <span className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-sm">
+                <UserCheck size={14} className="mr-1" />
+                Data Kepegawaian
+              </span>
+
+              <h1 className="text-2xl font-bold tracking-tight text-white">
+                {canManageStaff
+                  ? "Manajemen Staff"
+                  : "Data Staff"}
+              </h1>
+
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-violet-100">
+                {canManageStaff
+                  ? "Kelola data staff aktif di sekolah."
+                  : "Lihat daftar staff aktif di sekolah."}
+              </p>
+            </div>
+
+            {/* Tombol admin */}
+            {canManageStaff && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteAll}
+                  disabled={staff.length === 0}
+                  className="flex items-center gap-2 rounded-xl border border-red-300/50 bg-red-500/15 px-4 py-2 text-sm font-medium text-red-100 backdrop-blur-sm transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 size={16} />
+                  Hapus Semua
+                </button>
+
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20">
+                  <Upload size={16} />
+                  Import CSV
+
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleImportCsv}
+                    className="hidden"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  disabled={staff.length === 0}
+                  className="flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  Export CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openTambah}
+                  className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-violet-700 shadow-md transition hover:bg-violet-50"
+                >
+                  <Plus size={16} />
+                  Tambah Staff
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mode lihat saja */}
+          {!canManageStaff && (
+            <div className="mt-5 flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white backdrop-blur-sm">
+              <Info
+                size={18}
+                className="mt-0.5 shrink-0 text-violet-100"
+              />
+
+              <div>
+                <p className="font-semibold">
+                  Mode lihat saja
+                </p>
+
+                <p className="mt-0.5 text-xs leading-relaxed text-violet-100">
+                  Data staff hanya dapat ditambah, diubah,
+                  atau dinonaktifkan oleh admin.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+
       {/* Info format CSV */}
-      <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
-        <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
-        <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-          nama;nip;noWa;password
-        </code>
-        — kolom{" "}
-        <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-          noWa
-        </code>{" "}
-        opsional.
-      </div>
+      {canManageStaff && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
+          <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
+          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+            nama;nip;noWa;password
+          </code>
+          — kolom{" "}
+          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+            noWa
+          </code>{" "}
+          opsional.
+        </div>
+      )}
 
       {/* Search */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -500,11 +674,13 @@ export default function StaffPage() {
                   <th className={thClass}>Nama</th>
                   <th className={thClass}>NIP</th>
                   <th className={thClass}>No. WhatsApp</th>
-                  <th className={`${thClass} text-center`}>Aksi</th>
+                  {canManageStaff && (
+                    <th className={`${thClass} text-center`}>Aksi</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                <SkeletonRows />
+                <SkeletonRows showActions={canManageStaff} />
               </tbody>
             </table>
           </div>
@@ -544,7 +720,9 @@ export default function StaffPage() {
                   <th className={thClass}>Nama</th>
                   <th className={thClass}>NIP</th>
                   <th className={thClass}>No. WhatsApp</th>
-                  <th className={`${thClass} text-center`}>Aksi</th>
+                  {canManageStaff && (
+                    <th className={`${thClass} text-center`}>Aksi</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -578,24 +756,26 @@ export default function StaffPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEdit(s)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/70 text-xs font-semibold transition"
-                        >
-                          <Edit size={14} />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(s)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/70 text-xs font-semibold transition"
-                        >
-                          <Trash2 size={14} />
-                          Hapus
-                        </button>
-                      </div>
-                    </td>
+                    {canManageStaff && (
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openEdit(s)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/70 text-xs font-semibold transition"
+                          >
+                            <Edit size={14} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(s)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/70 text-xs font-semibold transition"
+                          >
+                            <Trash2 size={14} />
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -605,7 +785,7 @@ export default function StaffPage() {
       </div>
 
       {/* Modal Form */}
-      {showForm && (
+      {canManageStaff && showForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="relative overflow-hidden px-6 py-5 border-b border-gray-100 dark:border-gray-800">

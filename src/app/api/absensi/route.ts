@@ -5,7 +5,26 @@ import { nowJakarta, todayJakarta, timeJakarta, dayJakarta } from "@/lib/time";
 import type { HariMinggu } from "@prisma/client";
 
 function toMinutes(time: string) {
-  const [jam, menit] = time.split(":").map(Number);
+  const match = time.match(/^(\d{2}):(\d{2})$/);
+
+  if (!match) {
+    throw new Error(`Format waktu tidak valid: ${time}`);
+  }
+
+  const jam = Number(match[1]);
+  const menit = Number(match[2]);
+
+  if (
+    !Number.isInteger(jam) ||
+    !Number.isInteger(menit) ||
+    jam < 0 ||
+    jam > 23 ||
+    menit < 0 ||
+    menit > 59
+  ) {
+    throw new Error(`Nilai waktu tidak valid: ${time}`);
+  }
+
   return jam * 60 + menit;
 }
 
@@ -32,8 +51,11 @@ export async function POST(req: Request) {
     const tanggal = todayJakarta();
     const jamSekarang = timeJakarta();
 
-    const pengaturan = await prisma.pengaturan.findFirst();
-
+    const pengaturan = await prisma.pengaturan.findFirst({
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
     const jamBerangkatMulai = pengaturan?.jamBerangkatMulai ?? "07:00";
 
     const jamBerangkatHadirSelesai =
@@ -43,8 +65,7 @@ export async function POST(req: Request) {
 
     const toleransiMengajarMenit = pengaturan?.toleransiMengajarMenit ?? 30;
 
-    const jamPulangMulai = pengaturan?.jamPulangMulai ?? "13:00";
-
+    const jamPulangMulai = pengaturan?.jamPulangMulai ?? "12:00";
     const jamPulangSelesai = pengaturan?.jamPulangSelesai ?? "16:00";
 
     let tipe: "BERANGKAT" | "JAM_MENGAJAR" | "PULANG";

@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { todayJakarta, dayJakarta } from "@/lib/time";
 import type { HariMinggu } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export async function GET() {
   try {
     const session = await auth();
@@ -15,16 +17,8 @@ export async function GET() {
     const tanggal = todayJakarta();
     const hariSekarang = dayJakarta();
 
-    if (hariSekarang === "MINGGU") {
-      return NextResponse.json(
-        {
-          error: "Tidak ada jadwal mengajar pada hari Minggu",
-        },
-        { status: 400 },
-      );
-    }
-
-    const hariIni = hariSekarang as HariMinggu;
+    const hariIni: HariMinggu | null =
+      hariSekarang === "MINGGU" ? null : (hariSekarang as HariMinggu);
 
     const userId = session.user.id;
     const role = session.user.role;
@@ -89,7 +83,7 @@ export async function GET() {
       jenisIzin: !berangkat ? (izinHariIni?.jenisIzin ?? null) : null,
     });
 
-    if (role === "GURU") {
+    if (role === "GURU" && hariIni) {
       const guru = await prisma.guru.findUnique({
         where: {
           userId,
@@ -152,7 +146,11 @@ export async function GET() {
       jenisIzin: !pulang ? (izinHariIni?.jenisIzin ?? null) : null,
     });
 
-    return NextResponse.json(targets);
+    return NextResponse.json(targets, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
     console.error("TARGET_ABSENSI_ERROR:", error);
 

@@ -1,19 +1,75 @@
 import { NextResponse } from "next/server";
+import type { HariMinggu, SemesterAkademik } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { nowJakarta } from "@/lib/time";
+
+function getTanggalJakartaSekarang() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 function parseTanggal(tanggalStr?: string | null) {
-  if (!tanggalStr) {
-    const now = nowJakarta();
-    now.setHours(0, 0, 0, 0);
-    return now;
+  const tanggalValue = tanggalStr?.trim() || getTanggalJakartaSekarang();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggalValue)) {
+    return null;
   }
 
-  const [year, month, day] = tanggalStr.split("-").map(Number);
-  const tanggal = new Date(year, month - 1, day);
-  tanggal.setHours(0, 0, 0, 0);
+  const [year, month, day] = tanggalValue.split("-").map(Number);
+
+  const tanggal = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+
+  if (
+    tanggal.getUTCFullYear() !== year ||
+    tanggal.getUTCMonth() !== month - 1 ||
+    tanggal.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
   return tanggal;
+}
+
+function getHariMinggu(tanggal: Date): HariMinggu | null {
+  const hariMap: Partial<Record<number, HariMinggu>> = {
+    1: "SENIN",
+    2: "SELASA",
+    3: "RABU",
+    4: "KAMIS",
+    5: "JUMAT",
+    6: "SABTU",
+  };
+
+  return hariMap[tanggal.getUTCDay()] ?? null;
+}
+
+function getPeriodeAkademik(tanggal: Date): {
+  tahunAjaran: string;
+  semester: SemesterAkademik;
+} {
+  const tahun = tanggal.getUTCFullYear();
+  const bulan = tanggal.getUTCMonth() + 1;
+
+  if (bulan >= 7) {
+    return {
+      tahunAjaran: `${tahun}/${tahun + 1}`,
+      semester: "GANJIL",
+    };
+  }
+
+  return {
+    tahunAjaran: `${tahun - 1}/${tahun}`,
+    semester: "GENAP",
+  };
+}
+
+function hitungTidakHadir(total: number, hadir: number, terlambat: number) {
+  return Math.max(total - hadir - terlambat, 0);
 }
 
 export async function GET(req: Request) {
@@ -21,7 +77,7 @@ export async function GET(req: Request) {
     const session = await auth();
 
     if (
-      !session ||
+      !session?.user ||
       !["ADMIN", "PIMPINAN", "GURU", "STAFF"].includes(session.user.role)
     ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,137 +87,253 @@ export async function GET(req: Request) {
     const tanggalParam = searchParams.get("tanggal");
     const tanggal = parseTanggal(tanggalParam);
 
-    const hariMap: Record<number, string> = {
-      1: "SENIN",
-      2: "SELASA",
-      3: "RABU",
-      4: "KAMIS",
-      5: "JUMAT",
-      6: "SABTU",
-    };
+    if (!tanggal) {
+      return NextResponse.json(
+        {
+          error: "Format tanggal tidak valid. Gunakan YYYY-MM-DD.",
+        },
+        { status: 400 },
+      );
+    }
 
-    const hariIni = hariMap[tanggal.getDay()];
+    const hariIni = getHariMinggu(tanggal);
 
-    const [totalGuru, totalStaff, totalSiswa, absensiSiswaHariIni] =
-      await Promise.all([
-        prisma.user.count({ where: { role: "GURU", aktif: true } }),
-        prisma.user.count({ where: { role: "STAFF", aktif: true } }),
-        prisma.siswa.count({ where: { aktif: true } }),
-        prisma.absensiSiswa.findMany({ where: { tanggal } }),
-      ]);
+    const { tahunAjaran, semester } = getPeriodeAkademik(tanggal);
 
+    const [
+      totalGuru,
+      totalStaff,
+      totalSiswa,
+      absensiSiswaHariIni,
+      absensiHariIni,
+    ] = await Promise.all([
+      prisma.user.count({
+        where: {
+          role: "GURU",
+          aktif: true,
+        },
+      }),
+
+      prisma.user.count({
+        where: {
+          role: "STAFF",
+          aktif: true,
+        },
+      }),
+
+      prisma.siswa.count({
+        where: {
+          aktif: true,
+        },
+      }),
+
+      prisma.absensiSiswa.findMany({
+        where: {
+          tanggal,
+        },
+        select: {
+          status: true,
+        },
+      }),
+
+      prisma.absensi.findMany({
+        where: {
+          tanggal,
+          tipe: "BERANGKAT",
+        },
+        select: {
+          status: true,
+          user: {
+            select: {
+              role: true,
+              aktif: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    /*
+     * HADIR dan TERLAMBAT harus dihitung terpisah.
+     * Jangan memasukkan TERLAMBAT ke jumlah HADIR.
+     */
     const siswaHadir = absensiSiswaHariIni.filter(
-      (a) => a.status === "HADIR" || a.status === "TERLAMBAT",
+      (absensi) => absensi.status === "HADIR",
     ).length;
 
     const siswaTerlambat = absensiSiswaHariIni.filter(
-      (a) => a.status === "TERLAMBAT",
+      (absensi) => absensi.status === "TERLAMBAT",
     ).length;
-
-    const absensiHariIni = await prisma.absensi.findMany({
-      where: {
-        tanggal,
-        tipe: "BERANGKAT",
-      },
-      include: {
-        user: true,
-      },
-    });
 
     const guruHadir = absensiHariIni.filter(
-      (a) =>
-        a.user.role === "GURU" &&
-        (a.status === "HADIR" || a.status === "TERLAMBAT"),
+      (absensi) =>
+        absensi.user.aktif &&
+        absensi.user.role === "GURU" &&
+        absensi.status === "HADIR",
     ).length;
 
-    const guruTerlambat = 0;
+    const guruTerlambat = absensiHariIni.filter(
+      (absensi) =>
+        absensi.user.aktif &&
+        absensi.user.role === "GURU" &&
+        absensi.status === "TERLAMBAT",
+    ).length;
 
     const staffHadir = absensiHariIni.filter(
-      (a) =>
-        a.user.role === "STAFF" &&
-        (a.status === "HADIR" || a.status === "TERLAMBAT"),
+      (absensi) =>
+        absensi.user.aktif &&
+        absensi.user.role === "STAFF" &&
+        absensi.status === "HADIR",
     ).length;
 
-    const staffTerlambat = 0;
+    const staffTerlambat = absensiHariIni.filter(
+      (absensi) =>
+        absensi.user.aktif &&
+        absensi.user.role === "STAFF" &&
+        absensi.status === "TERLAMBAT",
+    ).length;
 
-    const jadwalWhere: {
-      hari: string;
-      aktif: boolean;
-      guruId?: string;
-    } = {
-      hari: hariIni as string,
-      aktif: true,
-    };
+    const guruTidakHadir = hitungTidakHadir(
+      totalGuru,
+      guruHadir,
+      guruTerlambat,
+    );
+
+    const staffTidakHadir = hitungTidakHadir(
+      totalStaff,
+      staffHadir,
+      staffTerlambat,
+    );
+
+    const siswaTidakHadir = hitungTidakHadir(
+      totalSiswa,
+      siswaHadir,
+      siswaTerlambat,
+    );
+
+    let guruId: string | undefined;
 
     if (session.user.role === "GURU") {
       const guru = await prisma.guru.findUnique({
-        where: { userId: session.user.id },
+        where: {
+          userId: session.user.id,
+        },
+        select: {
+          id: true,
+        },
       });
+
       if (!guru) {
         return NextResponse.json({
           totalGuru,
           totalStaff,
           totalSiswa,
+
           guruHadir,
           guruTerlambat,
-          guruTidakHadir: totalGuru - guruHadir,
+          guruTidakHadir,
+
           staffHadir,
           staffTerlambat,
-          staffTidakHadir: totalStaff - staffHadir,
+          staffTidakHadir,
+
           siswaHadir,
           siswaTerlambat,
-          siswaTidakHadir: totalSiswa - siswaHadir,
+          siswaTidakHadir,
+
+          periode: {
+            tahunAjaran,
+            semester,
+          },
+
           jadwal: [],
         });
       }
-      jadwalWhere.guruId = guru.id;
+
+      guruId = guru.id;
     }
 
     const jadwalHariIni =
       hariIni && session.user.role !== "STAFF"
         ? await prisma.jadwal.findMany({
-            where: jadwalWhere as any,
+            where: {
+              hari: hariIni,
+              aktif: true,
+
+              tahunAjaran,
+              semester,
+
+              ...(guruId
+                ? {
+                    guruId,
+                  }
+                : {}),
+            },
+
             include: {
-              guru: { include: { user: true } },
+              guru: {
+                include: {
+                  user: true,
+                },
+              },
               kelas: true,
               mataPelajaran: true,
               ruangan: true,
             },
-            orderBy: { jamMulai: "asc" },
+
+            orderBy: {
+              jamMulai: "asc",
+            },
           })
         : [];
 
-    // Ambil semua absensi mengajar hari ini sekaligus — satu query
-    const semuaAbsensiMengajar = await prisma.absensi.findMany({
-      where: {
-        tipe: "JAM_MENGAJAR",
-        tanggal,
-        jadwalId: { in: jadwalHariIni.map((j) => j.id) },
-      },
-      select: {
-        userId: true,
-        jadwalId: true,
-        status: true,
-        waktuScan: true,
-      },
-    });
+    const jadwalIds = jadwalHariIni.map((jadwal) => jadwal.id);
 
-    // Hitung per jadwal di memory — tidak perlu query lagi
-    const jadwalDenganStatus = jadwalHariIni.map((j) => {
-      const absensi = semuaAbsensiMengajar.find(
-        (a) => a.userId === j.guru.userId && a.jadwalId === j.id,
+    const semuaAbsensiMengajar =
+      jadwalIds.length > 0
+        ? await prisma.absensi.findMany({
+            where: {
+              tipe: "JAM_MENGAJAR",
+              tanggal,
+              jadwalId: {
+                in: jadwalIds,
+              },
+            },
+
+            select: {
+              userId: true,
+              jadwalId: true,
+              status: true,
+              waktuScan: true,
+            },
+          })
+        : [];
+
+    const absensiMengajarByJadwal = new Map(
+      semuaAbsensiMengajar.map((absensi) => [
+        `${absensi.userId}:${absensi.jadwalId}`,
+        absensi,
+      ]),
+    );
+
+    const jadwalDenganStatus = jadwalHariIni.map((jadwal) => {
+      const absensi = absensiMengajarByJadwal.get(
+        `${jadwal.guru.userId}:${jadwal.id}`,
       );
 
       return {
-        id: j.id,
-        jamMulai: j.jamMulai,
-        jamSelesai: j.jamSelesai,
-        guru: j.guru.user.nama,
-        guruId: j.guru.userId,
-        noWa: j.guru.user.noWa,
-        mapel: j.mataPelajaran.nama,
-        kelas: j.kelas.nama,
-        ruangan: j.ruangan.nama,
+        id: jadwal.id,
+        jamMulai: jadwal.jamMulai,
+        jamSelesai: jadwal.jamSelesai,
+
+        guru: jadwal.guru.user.nama,
+        guruId: jadwal.guru.userId,
+        noWa: jadwal.guru.user.noWa,
+
+        mapel: jadwal.mataPelajaran.nama,
+        kelas: jadwal.kelas.nama,
+        ruangan: jadwal.ruangan.nama,
+
         status: absensi?.status ?? "BELUM",
         waktuScan: absensi?.waktuScan ?? null,
       };
@@ -171,19 +343,29 @@ export async function GET(req: Request) {
       totalGuru,
       totalStaff,
       totalSiswa,
+
       guruHadir,
       guruTerlambat,
-      guruTidakHadir: totalGuru - guruHadir,
+      guruTidakHadir,
+
       staffHadir,
       staffTerlambat,
-      staffTidakHadir: totalStaff - staffHadir,
+      staffTidakHadir,
+
       siswaHadir,
       siswaTerlambat,
-      siswaTidakHadir: totalSiswa - siswaHadir,
+      siswaTidakHadir,
+
+      periode: {
+        tahunAjaran,
+        semester,
+      },
+
       jadwal: jadwalDenganStatus,
     });
   } catch (error) {
     console.error("DASHBOARD_ERROR:", error);
+
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

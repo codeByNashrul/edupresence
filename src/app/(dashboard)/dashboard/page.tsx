@@ -160,6 +160,7 @@ function StatCard({
   icon: Icon,
   gradient,
   accent,
+  href,
 }: {
   label: string;
   value: number | string;
@@ -167,25 +168,104 @@ function StatCard({
   icon: React.ElementType;
   gradient: string;
   accent: string;
+  href?: string;
 }) {
-  return (
+  const content = (
     <div
-      className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient}`}
+      className={`relative h-full overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient} ${
+        href
+          ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-xl"
+          : ""
+      }`}
     >
       <div className="absolute -right-3 -top-3 opacity-20">
         <Icon size={72} strokeWidth={1.5} />
       </div>
+
       <div className="relative z-10">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="p-2 rounded-xl bg-white/20 backdrop-blur-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="rounded-xl bg-white/20 p-2 backdrop-blur-sm">
             <Icon size={18} />
           </span>
+
           <p className="text-sm font-medium text-white/90">{label}</p>
         </div>
+
         <p className="text-3xl font-bold tracking-tight">{value}</p>
-        {sub && <p className={`text-xs mt-1.5 font-medium ${accent}`}>{sub}</p>}
+
+        {sub && <p className={`mt-1.5 text-xs font-medium ${accent}`}>{sub}</p>}
+
+        {href && (
+          <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-white/90">
+            Lihat data
+            <ArrowRight size={13} />
+          </p>
+        )}
       </div>
     </div>
+  );
+
+  if (!href) {
+    return content;
+  }
+
+  return (
+    <Link
+      href={href}
+      className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+      aria-label={`Buka ${label}`}
+    >
+      {content}
+    </Link>
+  );
+}
+
+function DirectoryCard({
+  title,
+  count,
+  description,
+  icon: Icon,
+  href,
+}: {
+  title: string;
+  count: number;
+  description: string;
+  icon: React.ElementType;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-800"
+    >
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition group-hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-400 dark:group-hover:bg-indigo-950">
+        <Icon size={20} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {title}
+        </p>
+
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          {description}
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          {count}
+        </p>
+
+        <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+          Lihat
+          <ArrowRight
+            size={12}
+            className="transition-transform group-hover:translate-x-1"
+          />
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -241,7 +321,7 @@ function ProgressRing({
         {label}
       </p>
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        {value} / {total} hadir
+        {value} / {total} hadir atau terlambat
       </p>
     </div>
   );
@@ -859,9 +939,18 @@ export default function DashboardPage() {
   const userName = session?.user?.name ?? "Pengguna";
 
   const totalPegawai = (data.totalGuru ?? 0) + (data.totalStaff ?? 0);
-  const pctGuru = pct(data.guruHadir ?? 0, data.totalGuru ?? 0);
-  const pctStaff = pct(data.staffHadir ?? 0, data.totalStaff ?? 0);
-  const pctSiswa = pct(data.siswaHadir ?? 0, data.totalSiswa ?? 0);
+
+  const guruTercatat = (data.guruHadir ?? 0) + (data.guruTerlambat ?? 0);
+
+  const staffTercatat = (data.staffHadir ?? 0) + (data.staffTerlambat ?? 0);
+
+  const siswaTercatat = (data.siswaHadir ?? 0) + (data.siswaTerlambat ?? 0);
+
+  const pctGuru = pct(guruTercatat, data.totalGuru ?? 0);
+
+  const pctStaff = pct(staffTercatat, data.totalStaff ?? 0);
+
+  const pctSiswa = pct(siswaTercatat, data.totalSiswa ?? 0);
 
   const kehadiranData = [
     {
@@ -930,11 +1019,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-indigo-200">Kehadiran pegawai</p>
                     <p className="text-lg font-bold">
-                      {pct(
-                        (data.guruHadir ?? 0) + (data.staffHadir ?? 0),
-                        totalPegawai,
-                      )}
-                      %
+                      {pct(guruTercatat + staffTercatat, totalPegawai)}% %
                     </p>
                   </div>
                 </div>
@@ -943,7 +1028,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-indigo-200">Kehadiran siswa</p>
                     <p className="text-lg font-bold">
-                      {pct(data.siswaHadir ?? 0, data.totalSiswa ?? 0)}%
+                      {pct(siswaTercatat, data.totalSiswa ?? 0)}%
                     </p>
                   </div>
                 </div>
@@ -959,6 +1044,7 @@ export default function DashboardPage() {
               icon={GraduationCap}
               gradient="bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-indigo-500/25"
               accent="text-indigo-200"
+              href="/guru"
             />
             <StatCard
               label="Total Staff"
@@ -967,6 +1053,7 @@ export default function DashboardPage() {
               icon={Briefcase}
               gradient="bg-gradient-to-br from-violet-500 to-purple-700 shadow-violet-500/25"
               accent="text-violet-200"
+              href="/staff"
             />
             <StatCard
               label="Total Siswa"
@@ -975,27 +1062,34 @@ export default function DashboardPage() {
               icon={School}
               gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/25"
               accent="text-rose-100"
+              href="/siswa"
             />
             <StatCard
-              label="Guru Hadir"
-              value={data.guruHadir ?? 0}
-              sub={`${pctGuru}% dari ${data.totalGuru ?? 0} guru`}
+              label="Kehadiran Guru"
+              value={guruTercatat}
+              sub={`${data.guruHadir ?? 0} hadir · ${
+                data.guruTerlambat ?? 0
+              } terlambat`}
               icon={UserCheck}
               gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/25"
               accent="text-emerald-100"
             />
             <StatCard
-              label="Staff Hadir"
-              value={data.staffHadir ?? 0}
-              sub={`${pctStaff}% dari ${data.totalStaff ?? 0} staff`}
+              label="Kehadiran Staff"
+              value={staffTercatat}
+              sub={`${data.staffHadir ?? 0} hadir · ${
+                data.staffTerlambat ?? 0
+              } terlambat`}
               icon={Users}
               gradient="bg-gradient-to-br from-sky-500 to-blue-600 shadow-sky-500/25"
               accent="text-sky-100"
             />
             <StatCard
-              label="Siswa Hadir"
-              value={data.siswaHadir ?? 0}
-              sub={`${pctSiswa}% dari ${data.totalSiswa ?? 0} siswa`}
+              label="Kehadiran Siswa"
+              value={siswaTercatat}
+              sub={`${data.siswaHadir ?? 0} hadir · ${
+                data.siswaTerlambat ?? 0
+              } terlambat`}
               icon={UserCheck}
               gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/25"
               accent="text-orange-100"
@@ -1006,7 +1100,7 @@ export default function DashboardPage() {
             {[
               {
                 label: "Guru",
-                value: data.guruHadir ?? 0,
+                value: guruTercatat,
                 total: data.totalGuru ?? 0,
                 color: CHART_COLORS.hadir,
                 icon: GraduationCap,
@@ -1014,7 +1108,7 @@ export default function DashboardPage() {
               },
               {
                 label: "Staff",
-                value: data.staffHadir ?? 0,
+                value: staffTercatat,
                 total: data.totalStaff ?? 0,
                 color: CHART_COLORS.staff,
                 icon: Briefcase,
@@ -1022,7 +1116,7 @@ export default function DashboardPage() {
               },
               {
                 label: "Siswa",
-                value: data.siswaHadir ?? 0,
+                value: siswaTercatat,
                 total: data.totalSiswa ?? 0,
                 color: "#f43f5e",
                 icon: School,
@@ -1335,6 +1429,52 @@ export default function DashboardPage() {
               icon={Sunset}
               href="/scan"
             />
+          </div>
+        )}
+
+        {(isGuru || isStaff) && (
+          <div className="mb-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100">
+                  Direktori Sekolah
+                </h2>
+
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Data aktif warga sekolah
+                </p>
+              </div>
+
+              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+                Lihat saja
+              </span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <DirectoryCard
+                title="Guru Aktif"
+                count={data.totalGuru ?? 0}
+                description="Daftar tenaga pengajar"
+                icon={GraduationCap}
+                href="/guru"
+              />
+
+              <DirectoryCard
+                title="Staff Aktif"
+                count={data.totalStaff ?? 0}
+                description="Daftar tenaga kependidikan"
+                icon={Briefcase}
+                href="/staff"
+              />
+
+              <DirectoryCard
+                title="Siswa Aktif"
+                count={data.totalSiswa ?? 0}
+                description="Daftar siswa sekolah"
+                icon={School}
+                href="/siswa"
+              />
+            </div>
           </div>
         )}
 

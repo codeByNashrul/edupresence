@@ -1,56 +1,86 @@
+const TIME_ZONE_JAKARTA = "Asia/Jakarta";
+
+type HariJakarta =
+  | "SENIN"
+  | "SELASA"
+  | "RABU"
+  | "KAMIS"
+  | "JUMAT"
+  | "SABTU"
+  | "MINGGU";
+
+function getJakartaDateParts(date: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE_JAKARTA,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return {
+    year: getPart("year"),
+    month: getPart("month"),
+    day: getPart("day"),
+    hour: getPart("hour"),
+    minute: getPart("minute"),
+    second: getPart("second"),
+  };
+}
+
+/**
+ * Date menyimpan waktu sebagai instant UTC.
+ * Zona waktu diterapkan saat waktu diformat atau dibaca.
+ */
 export function nowJakarta() {
   return new Date();
 }
 
+/**
+ * Menghasilkan tanggal hari ini di Jakarta yang dinormalisasi
+ * ke pukul 00:00 UTC agar konsisten di local dan production.
+ */
 export function todayJakarta() {
-  const now = new Date();
+  const { year, month, day } = getJakartaDateParts();
 
-  const tanggal = new Date(
-    now.toLocaleDateString("sv-SE", {
-      timeZone: "Asia/Jakarta",
-    }),
+  return new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0),
   );
-
-  tanggal.setHours(0, 0, 0, 0);
-  return tanggal;
 }
 
+/**
+ * Selalu menghasilkan format HH:mm, misalnya:
+ * 07:05
+ * 11:00
+ * 23:59
+ */
 export function timeJakarta() {
-  const now = new Date();
+  const { hour, minute } = getJakartaDateParts();
 
-  return now.toLocaleTimeString("id-ID", {
-    timeZone: "Asia/Jakarta",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return `${hour}:${minute}`;
 }
 
-export function dayJakarta() {
-  const now = new Date();
+export function dayJakarta(): HariJakarta {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE_JAKARTA,
+    weekday: "short",
+  }).format(new Date());
 
-  const day = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Jakarta",
-      weekday: "short",
-    })
-      .formatToParts(now)
-      .find((part) => part.type === "weekday")?.value,
-  );
-
-  const hariMap: Record<string, string> = {
+  const hariMap: Record<string, HariJakarta> = {
     Mon: "SENIN",
     Tue: "SELASA",
     Wed: "RABU",
     Thu: "KAMIS",
     Fri: "JUMAT",
     Sat: "SABTU",
+    Sun: "MINGGU",
   };
 
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Jakarta",
-    weekday: "short",
-  }).format(now);
-
-  return hariMap[weekday];
+  return hariMap[weekday] ?? "MINGGU";
 }

@@ -20,6 +20,16 @@ const PUBLIC_PREFIXES = [
   "/~offline",
 ];
 
+const DIRECTORY_ROUTES = ["/guru", "/staff", "/siswa"];
+
+const DIRECTORY_ROLES = ["ADMIN", "PIMPINAN", "GURU", "STAFF"];
+
+const ADMIN_ROUTES = ["/kelas", "/ruangan", "/pengaturan"];
+
+function matchesRoute(pathname: string, route: string) {
+  return pathname === route || pathname.startsWith(`${route}/`);
+}
+
 export default auth((req) => {
   const { nextUrl, auth: session } = req;
   const pathname = nextUrl.pathname;
@@ -32,15 +42,25 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  if (!session) {
+  if (!session?.user) {
     return NextResponse.redirect(new URL("/login", nextUrl));
   }
 
-  const adminRoutes = ["/guru", "/staff", "/kelas", "/ruangan", "/pengaturan"];
+  const role = session.user.role;
 
-  const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
+  const isDirectoryRoute = DIRECTORY_ROUTES.some((route) =>
+    matchesRoute(pathname, route),
+  );
 
-  if (isAdminRoute && session.user.role !== "ADMIN") {
+  if (isDirectoryRoute && !DIRECTORY_ROLES.includes(role)) {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+  }
+
+  const isAdminRoute = ADMIN_ROUTES.some((route) =>
+    matchesRoute(pathname, route),
+  );
+
+  if (isAdminRoute && role !== "ADMIN") {
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
   }
 
