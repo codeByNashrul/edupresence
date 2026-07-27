@@ -26,6 +26,10 @@ const DIRECTORY_ROLES = ["ADMIN", "PIMPINAN", "GURU", "STAFF"];
 
 const ADMIN_ROUTES = ["/kelas", "/ruangan", "/pengaturan"];
 
+const PIKET_ROUTES = ["/piket"];
+
+const PIKET_PAGE_ROLES = ["ADMIN", "PIMPINAN", "PIKET"];
+
 function matchesRoute(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);
 }
@@ -47,6 +51,29 @@ export default auth((req) => {
   }
 
   const role = session.user.role;
+  const isApiRoute = pathname.startsWith("/api/");
+
+  const isPiketRoute = PIKET_ROUTES.some((route) =>
+    matchesRoute(pathname, route),
+  );
+
+  /*
+   * Halaman /piket hanya boleh dibuka oleh:
+   * ADMIN, PIMPINAN, dan PIKET.
+   */
+  if (isPiketRoute && !PIKET_PAGE_ROLES.includes(role)) {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+  }
+
+  /*
+   * Akun PIKET hanya boleh membuka halaman /piket.
+   *
+   * API tidak dibatasi di proxy ini karena keamanan API
+   * harus diterapkan di masing-masing route handler.
+   */
+  if (!isApiRoute && role === "PIKET" && !isPiketRoute) {
+    return NextResponse.redirect(new URL("/piket", nextUrl));
+  }
 
   const isDirectoryRoute = DIRECTORY_ROUTES.some((route) =>
     matchesRoute(pathname, route),

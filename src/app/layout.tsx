@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { ThemeProvider } from "next-themes";
+import AuthProvider from "@/components/providers/AuthProvider";
 
 import "./globals.css";
 
@@ -77,16 +78,27 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="id" suppressHydrationWarning>
       <body className={`${plusJakarta.className} antialiased`}>
-        <SerwistProvider swUrl="/serwist/sw.js">
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            {children}
-          </ThemeProvider>
-        </SerwistProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            {process.env.NODE_ENV === "production" ? (
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="light"
+                enableSystem
+                disableTransitionOnChange
+              >
+                {children}
+              </ThemeProvider>
+            ) : (
+              children
+            )}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

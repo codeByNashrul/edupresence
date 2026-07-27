@@ -35,6 +35,22 @@ async function main() {
     },
   });
 
+  // 3. Piket SMP Center
+  const piketPassword = await bcrypt.hash("piket123", 12);
+
+  await prisma.user.upsert({
+    where: { nip: "PIKET-SMP" },
+    update: {},
+    create: {
+      nama: "Piket SMP Center",
+      nip: "PIKET-SMP",
+      password: piketPassword,
+      noWa: "628xxxxxxxxxx", // ganti nomor SMP Center
+      role: Role.PIKET,
+      aktif: true,
+    },
+  });
+
   // 3. Kelas
   const kelasData = [
     { nama: "X-A", tingkat: "X" },
@@ -115,6 +131,7 @@ async function main() {
   console.log("📋 Akun default:");
   console.log("   Admin    → NIP: 000000000001 | Password: admin123");
   console.log("   Pimpinan → NIP: 000000000002 | Password: kepsek123");
+  console.log("   Piket    → NIP: PIKET-SMP      | Password: piket123");
 }
 
 main()

@@ -64,9 +64,19 @@ export default function LoginPage() {
       return;
     }
 
-    router.push(mode === "ortu" ? "/ortu/dashboard" : "/dashboard");
-  }
+    const sessionRes = await fetch("/api/auth/session");
+    const session = await sessionRes.json();
 
+    if (session?.user?.role === "PIKET") {
+      router.push("/piket");
+    } else if (mode === "ortu") {
+      router.push("/ortu/dashboard");
+    } else {
+      router.push("/dashboard");
+    }
+
+    setLoading(false);
+  }
   const inputClass =
     "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/80 text-gray-900 dark:text-gray-100 pl-11 pr-4 py-3.5 text-base sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition";
 
@@ -206,11 +216,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => switchMode("staff")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                  !isOrtu
-                    ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                }`}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${!isOrtu
+                  ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
               >
                 <Shield size={15} />
                 Guru / Staff
@@ -218,11 +227,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => switchMode("ortu")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                  isOrtu
-                    ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                }`}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${isOrtu
+                  ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
               >
                 <Users size={15} />
                 Orang Tua

@@ -14,39 +14,68 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: {},
       },
       async authorize(credentials) {
-        const password = credentials?.password as string;
-        if (!password) return null;
+        const password =
+          typeof credentials?.password === "string" ? credentials.password : "";
 
-        // ── Login ORTU (pakai NIS) ──────────────────────────
-        if (credentials?.nis) {
-          const ortu = await prisma.userOrtu.findFirst({
-            where: { nis: credentials.nis as string, aktif: true },
-            include: { siswa: true },
+        const nip =
+          typeof credentials?.nip === "string" ? credentials.nip.trim() : "";
+
+        const nis =
+          typeof credentials?.nis === "string" ? credentials.nis.trim() : "";
+
+        if (!password) {
+          return null;
+        }
+
+        // ── Login ORTU menggunakan NIS ──────────────────────────
+        if (nis) {
+          const ortu = await prisma.userOrtu.findUnique({
+            where: {
+              nis,
+            },
+            include: {
+              siswa: true,
+            },
           });
-          if (!ortu) return null;
 
-          const match = await bcrypt.compare(password, ortu.password);
-          if (!match) return null;
+          if (!ortu?.aktif) {
+            return null;
+          }
+
+          const passwordValid = await bcrypt.compare(password, ortu.password);
+
+          if (!passwordValid) {
+            return null;
+          }
 
           return {
             id: ortu.id,
             name: ortu.nama,
-            nip: ortu.nis, // diisi NIS supaya JWT token konsisten
+            nip: ortu.nis,
             nis: ortu.nis,
             role: "ORTU",
             siswaId: ortu.siswaId,
           };
         }
 
-        // ── Login STAFF/GURU/ADMIN/PIMPINAN (pakai NIP) ─────
-        if (credentials?.nip) {
-          const user = await prisma.user.findFirst({
-            where: { nip: credentials.nip as string, aktif: true },
+        // ── Login User menggunakan NIP ──────────────────────────
+        // ADMIN, PIMPINAN, GURU, STAFF, dan PIKET
+        if (nip) {
+          const user = await prisma.user.findUnique({
+            where: {
+              nip,
+            },
           });
-          if (!user) return null;
 
-          const match = await bcrypt.compare(password, user.password);
-          if (!match) return null;
+          if (!user?.aktif) {
+            return null;
+          }
+
+          const passwordValid = await bcrypt.compare(password, user.password);
+
+          if (!passwordValid) {
+            return null;
+          }
 
           return {
             id: user.id,
