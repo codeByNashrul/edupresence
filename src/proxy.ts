@@ -28,6 +28,7 @@ const ADMIN_ROUTES = ["/kelas", "/ruangan", "/pengaturan"];
 
 const PIKET_ROUTES = ["/piket"];
 
+const PIKET_ALLOWED_ROUTES = ["/piket", "/jadwal"];
 const PIKET_PAGE_ROLES = ["ADMIN", "PIMPINAN", "PIKET"];
 
 function matchesRoute(pathname: string, route: string) {
@@ -57,6 +58,10 @@ export default auth((req) => {
     matchesRoute(pathname, route),
   );
 
+  const isPiketAllowedRoute = PIKET_ALLOWED_ROUTES.some((route) =>
+    matchesRoute(pathname, route),
+  );
+
   /*
    * Halaman /piket hanya boleh dibuka oleh:
    * ADMIN, PIMPINAN, dan PIKET.
@@ -71,7 +76,7 @@ export default auth((req) => {
    * API tidak dibatasi di proxy ini karena keamanan API
    * harus diterapkan di masing-masing route handler.
    */
-  if (!isApiRoute && role === "PIKET" && !isPiketRoute) {
+  if (!isApiRoute && role === "PIKET" && !isPiketAllowedRoute) {
     return NextResponse.redirect(new URL("/piket", nextUrl));
   }
 

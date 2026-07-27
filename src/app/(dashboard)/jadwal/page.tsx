@@ -131,7 +131,10 @@ export default function JadwalPage() {
   const { data: session } = useSession();
   const role = session?.user?.role ?? "";
   const isAdmin = role === "ADMIN";
-  const canViewStatus = ["ADMIN", "PIMPINAN"].includes(role);
+
+  const canInputStatus = ["ADMIN", "PIKET"].includes(role);
+
+  const canViewStatus = ["ADMIN", "PIMPINAN", "PIKET"].includes(role);
   const tahunAjaranBerjalan = getTahunAjaranSekarang();
 
   const semesterBerjalan =
@@ -221,7 +224,7 @@ export default function JadwalPage() {
   }
 
   function openManualStatus(j: Jadwal) {
-    if (!isAdmin) return;
+    if (!canInputStatus) return;
 
     setManualJadwal(j);
     setManualStatus("HADIR");
@@ -268,8 +271,7 @@ export default function JadwalPage() {
   async function handleManualSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!isAdmin || !manualJadwal) return;
-
+    if (!canInputStatus || !manualJadwal) return;
     setManualLoading(true);
     setManualError("");
     setManualSuccess("");
@@ -477,11 +479,10 @@ export default function JadwalPage() {
             <button
               key={hari}
               onClick={() => setHariAktif(hari)}
-              className={`flex-1 min-w-[60px] px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                hariAktif === hari
-                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-              }`}
+              className={`flex-1 min-w-[60px] px-3 py-2 rounded-xl text-xs font-semibold transition-all ${hariAktif === hari
+                ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
             >
               {hari}
             </button>
@@ -549,7 +550,9 @@ export default function JadwalPage() {
 
                       {canViewStatus && <col className="w-[150px]" />}
 
-                      {isAdmin && <col className="w-[260px]" />}
+                      {canInputStatus && (
+                        <col className={isAdmin ? "w-[260px]" : "w-[130px]"} />
+                      )}
                     </colgroup>
                     <thead className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-800">
                       <tr>
@@ -568,7 +571,7 @@ export default function JadwalPage() {
                             Status
                           </th>
                         )}
-                        {isAdmin && (
+                        {canInputStatus && (
                           <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
                             Aksi
                           </th>
@@ -613,19 +616,18 @@ export default function JadwalPage() {
                                 {j.absensiHariIni ? (
                                   <div>
                                     <span
-                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${
-                                        j.absensiHariIni.status === "HADIR"
-                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                                          : j.absensiHariIni.status ===
-                                              "TERLAMBAT"
-                                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
-                                            : j.absensiHariIni.status === "IZIN"
-                                              ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
-                                              : j.absensiHariIni.status ===
-                                                  "SAKIT"
-                                                ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400"
-                                                : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
-                                      }`}
+                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${j.absensiHariIni.status === "HADIR"
+                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                        : j.absensiHariIni.status ===
+                                          "TERLAMBAT"
+                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
+                                          : j.absensiHariIni.status === "IZIN"
+                                            ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
+                                            : j.absensiHariIni.status ===
+                                              "SAKIT"
+                                              ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400"
+                                              : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
+                                        }`}
                                     >
                                       {j.absensiHariIni.status === "HADIR" ? (
                                         <CheckCircle2 size={10} />
@@ -666,17 +668,17 @@ export default function JadwalPage() {
                               </td>
                             )}
 
-                            {isAdmin && (
+                            {canInputStatus && (
                               <td className="px-4 py-3.5 align-middle">
                                 <div className="flex items-center gap-1.5 whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => openManualStatus(j)}
                                     disabled={Boolean(j.absensiHariIni)}
-                                    className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
-                                      j.absensiHariIni
-                                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-                                        : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
-                                    }`}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${j.absensiHariIni
+                                      ? "cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800"
+                                      : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400 dark:hover:bg-emerald-900/60"
+                                      }`}
                                     title={
                                       j.absensiHariIni
                                         ? "Jadwal ini sudah memiliki absensi"
@@ -686,20 +688,28 @@ export default function JadwalPage() {
                                     <CheckCircle2 size={11} />
                                     Status
                                   </button>
-                                  <button
-                                    onClick={() => openEdit(j)}
-                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors"
-                                  >
-                                    <Pencil size={11} />
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(j.id)}
-                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors"
-                                  >
-                                    <Trash2 size={11} />
-                                    Hapus
-                                  </button>
+
+                                  {isAdmin && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEdit(j)}
+                                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-400 dark:hover:bg-indigo-900/60"
+                                      >
+                                        <Pencil size={11} />
+                                        Edit
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDelete(j.id)}
+                                        className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-100 dark:bg-red-950/50 dark:text-red-400 dark:hover:bg-red-900/60"
+                                      >
+                                        <Trash2 size={11} />
+                                        Hapus
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </td>
                             )}
@@ -1029,13 +1039,12 @@ export default function JadwalPage() {
 
                             <td className="px-3 py-3">
                               <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                                  row.status === "VALID"
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                                    : row.status === "DUPLIKAT"
-                                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
-                                      : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
-                                }`}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${row.status === "VALID"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                  : row.status === "DUPLIKAT"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
+                                    : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
+                                  }`}
                               >
                                 {row.status === "VALID" ? (
                                   <CheckCircle2 size={10} />
@@ -1106,7 +1115,7 @@ export default function JadwalPage() {
       )}
 
       {/* Modal input status absensi mengajar */}
-      {isAdmin && showManualForm && manualJadwal && (
+      {canInputStatus && showManualForm && manualJadwal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800">

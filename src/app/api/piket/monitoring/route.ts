@@ -1,40 +1,69 @@
 import { NextResponse } from "next/server";
+import { HariMinggu } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { todayJakarta, dayJakarta, timeJakarta } from "@/lib/time";
-import type { HariMinggu } from "@prisma/client";
+import { dayJakarta, timeJakarta, todayJakarta } from "@/lib/time";
 
 function toMinutes(time: string) {
   const [jam, menit] = time.split(":").map(Number);
 
+  if (Number.isNaN(jam) || Number.isNaN(menit)) {
+    return 0;
+  }
+
   return jam * 60 + menit;
+}
+
+function emptyMonitoring() {
+  return {
+    total: 0,
+    hadir: 0,
+    terkonfirmasi: 0,
+    belum: 0,
+    data: [],
+    upcoming: [],
+  };
 }
 
 export async function GET() {
   try {
     const session = await auth();
 
-    if (
-      !session?.user ||
-      !["ADMIN", "PIMPINAN", "PIKET"].includes(session.user.role)
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowedRoles = new Set<string>(["ADMIN", "PIMPINAN", "PIKET"]);
+
+    if (!allowedRoles.has(session.user.role)) {
+      return NextResponse.json(
+        { error: "Anda tidak memiliki akses monitoring piket" },
+        { status: 403 },
+      );
     }
 
     const tanggal = todayJakarta();
-
-    const hari = dayJakarta();
-
+    const hariSekarang = dayJakarta();
     const jamSekarang = timeJakarta();
 
-    if (!hari) {
-      return NextResponse.json([]);
+    const hariValid = Object.values(HariMinggu).includes(
+      hariSekarang as HariMinggu,
+    );
+
+    if (!hariValid) {
+      return NextResponse.json(emptyMonitoring());
     }
 
     const semuaJadwal = await prisma.jadwal.findMany({
       where: {
-        hari: hari as HariMinggu,
+        hari: hariSekarang as HariMinggu,
         aktif: true,
+        guru: {
+          user: {
+            aktif: true,
+          },
+        },
       },
       include: {
         guru: {
@@ -53,64 +82,103 @@ export async function GET() {
 
     const sekarangMenit = toMinutes(jamSekarang);
 
-    // tampilkan:
-    // mulai 15 menit sebelum
-    // sampai selesai jam pelajaran
+    /*
+     * Jadwal aktif ditampilkan mulai 15 menit sebelum
+     * jam pelajaran sampai jam pelajaran selesai.
+     */
+    const jadwalAktif = semuaJadwal.filter((jadwal) => {
+      const mulaiMonitoring = toMinutes(jadwal.jamMulai) - 15;
 
-    const jadwal = semuaJadwal.filter((j) => {
-      const mulai = toMinutes(j.jamMulai) - 15;
+      const selesai = toMinutes(jadwal.jamSelesai);
 
-      const selesai = toMinutes(j.jamSelesai);
-
-      return sekarangMenit >= mulai && sekarangMenit <= selesai;
+      return sekarangMenit >= mulaiMonitoring && sekarangMenit <= selesai;
     });
 
-    const absensi = await prisma.absensi.findMany({
-      where: {
-        tanggal,
-        tipe: "JAM_MENGAJAR",
-      },
-    });
+    const jadwalAktifIds = new Set(jadwalAktif.map((jadwal) => jadwal.id));
 
-    const data = jadwal.map((j) => {
-      const hadir = absensi.find(
-        (a) => a.userId === j.guru.userId && a.jadwalId === j.id,
-      );
+    /*
+     * Maksimal lima jadwal berikutnya.
+     * Jadwal yang sudah masuk window monitoring tidak
+     * ditampilkan lagi di bagian berikutnya.
+     */
+    const jadwalBerikutnya = semuaJadwal
+      .filter((jadwal) => {
+        const mulai = toMinutes(jadwal.jamMulai);
+
+        return mulai > sekarangMenit && !jadwalAktifIds.has(jadwal.id);
+      })
+      .slice(0, 5);
+
+    const seluruhJadwalIds = [
+      ...new Set(
+        [...jadwalAktif, ...jadwalBerikutnya].map((jadwal) => jadwal.id),
+      ),
+    ];
+
+    const absensi = seluruhJadwalIds.length
+      ? await prisma.absensi.findMany({
+          where: {
+            tanggal,
+            tipe: "JAM_MENGAJAR",
+            jadwalId: {
+              in: seluruhJadwalIds,
+            },
+          },
+          orderBy: {
+            waktuScan: "desc",
+          },
+        })
+      : [];
+
+    /*
+     * Menyimpan absensi terbaru untuk setiap jadwal.
+     */
+    const absensiPerJadwal = new Map<string, (typeof absensi)[number]>();
+
+    for (const item of absensi) {
+      if (item.jadwalId && !absensiPerJadwal.has(item.jadwalId)) {
+        absensiPerJadwal.set(item.jadwalId, item);
+      }
+    }
+
+    function createMonitoringItem(jadwal: (typeof semuaJadwal)[number]) {
+      const absensiHariIni = absensiPerJadwal.get(jadwal.id);
 
       return {
-        jadwalId: j.id,
-
-        guru: j.guru.user.nama,
-
-        noWa: j.guru.user.noWa,
-
-        mapel: j.mataPelajaran.nama,
-
-        kelas: j.kelas.nama,
-
-        jam: `${j.jamMulai} - ${j.jamSelesai}`,
-
-        ruangan: j.ruangan.nama,
-
-        status: hadir?.status ?? "BELUM",
-
-        waktuScan: hadir?.waktuScan ?? null,
+        jadwalId: jadwal.id,
+        guru: jadwal.guru.user.nama,
+        noWa: jadwal.guru.user.noWa,
+        mapel: jadwal.mataPelajaran.nama,
+        kelas: jadwal.kelas.nama,
+        jam: `${jadwal.jamMulai} - ${jadwal.jamSelesai}`,
+        ruangan: jadwal.ruangan.nama,
+        status: absensiHariIni?.status ?? "BELUM",
+        waktuScan: absensiHariIni?.waktuScan ?? null,
       };
-    });
+    }
+
+    const data = jadwalAktif.map(createMonitoringItem);
+
+    const upcoming = jadwalBerikutnya.map(createMonitoringItem);
+
+    const hadir = data.filter(
+      (item) => item.status === "HADIR" || item.status === "TERLAMBAT",
+    ).length;
+
+    const terkonfirmasi = data.filter((item) => item.status !== "BELUM").length;
+
+    const belum = data.filter((item) => item.status === "BELUM").length;
 
     return NextResponse.json({
       total: data.length,
-
-      hadir: data.filter(
-        (d) => d.status === "HADIR" || d.status === "TERLAMBAT",
-      ).length,
-
-      belum: data.filter((d) => d.status === "BELUM").length,
-
+      hadir,
+      terkonfirmasi,
+      belum,
       data,
+      upcoming,
     });
   } catch (error) {
-    console.error("PIKET_MONITORING_ERROR", error);
+    console.error("PIKET_MONITORING_ERROR:", error);
 
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

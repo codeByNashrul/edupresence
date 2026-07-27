@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { todayJakarta, nowJakarta, dayJakarta } from "@/lib/time";
-import { HariMinggu, StatusAbsensi } from "@prisma/client";
+import { HariMinggu, Role, StatusAbsensi } from "@prisma/client";
 
 const STATUS_MANUAL: StatusAbsensi[] = [
   StatusAbsensi.HADIR,
@@ -12,6 +12,8 @@ const STATUS_MANUAL: StatusAbsensi[] = [
   StatusAbsensi.ALPHA,
 ];
 
+const ROLE_INPUT_MANUAL = new Set<Role>([Role.ADMIN, Role.PIKET]);
+
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -20,10 +22,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "ADMIN") {
+    const userRole = session.user.role as Role | undefined;
+
+    if (!userRole || !ROLE_INPUT_MANUAL.has(userRole)) {
       return NextResponse.json(
         {
-          error: "Hanya admin yang dapat menginput absensi manual",
+          error: "Anda tidak memiliki akses untuk menginput absensi manual",
         },
         { status: 403 },
       );
