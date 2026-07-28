@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import {
   CalendarDays,
@@ -18,6 +18,7 @@ import {
   ChevronDown,
   X,
   XCircle,
+  AlertTriangle,
 } from "lucide-react";
 
 const HARI_LIST = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
@@ -57,6 +58,8 @@ interface Ruangan {
 }
 
 type StatusManual = "HADIR" | "TERLAMBAT" | "IZIN" | "SAKIT" | "ALPHA";
+
+type ImportMode = "CREATE" | "REPLACE";
 
 type ImportRowStatus = "VALID" | "ERROR" | "DUPLIKAT";
 
@@ -99,11 +102,13 @@ interface ImportSummary {
   invalid: number;
   duplicate: number;
   imported?: number;
+  replaced?: number;
 }
 
 interface ImportResponse {
   success?: boolean;
   action?: "preview" | "commit";
+  mode?: ImportMode;
   message?: string;
   error?: string;
 
@@ -129,12 +134,30 @@ const selectArrow = (
 
 export default function JadwalPage() {
   const { data: session } = useSession();
-  const role = session?.user?.role ?? "";
-  const isAdmin = role === "ADMIN";
+  const userRoles = useMemo(() => {
+    const roleUtama = session?.user?.role;
 
-  const canInputStatus = ["ADMIN", "PIKET"].includes(role);
+    const rolesSession = Array.isArray(session?.user?.roles)
+      ? session.user.roles
+      : [];
 
-  const canViewStatus = ["ADMIN", "PIMPINAN", "PIKET"].includes(role);
+    return Array.from(
+      new Set(
+        [roleUtama, ...rolesSession].filter(
+          (item): item is string => typeof item === "string" && item.length > 0,
+        ),
+      ),
+    );
+  }, [session?.user?.role, session?.user?.roles]);
+
+  const hasRole = (targetRole: string) => userRoles.includes(targetRole);
+
+  const isAdmin = hasRole("ADMIN");
+
+  const canInputStatus = hasRole("ADMIN") || hasRole("PIKET");
+
+  const canViewStatus =
+    hasRole("ADMIN") || hasRole("PIMPINAN") || hasRole("PIKET");
   const tahunAjaranBerjalan = getTahunAjaranSekarang();
 
   const semesterBerjalan =
@@ -157,6 +180,7 @@ export default function JadwalPage() {
   const [manualError, setManualError] = useState("");
   const [manualSuccess, setManualSuccess] = useState("");
   const [showImportForm, setShowImportForm] = useState(false);
+  const [importMode, setImportMode] = useState<ImportMode>("CREATE");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<ImportResponse | null>(
     null,
@@ -311,9 +335,10 @@ export default function JadwalPage() {
     }
   }
 
-  function openImportForm() {
+  function openImportForm(mode: ImportMode) {
     if (!isAdmin) return;
 
+    setImportMode(mode);
     setImportFile(null);
     setImportPreview(null);
     setImportError("");
@@ -328,6 +353,7 @@ export default function JadwalPage() {
     if (importLoading) return;
 
     setShowImportForm(false);
+    setImportMode("CREATE");
     setImportFile(null);
     setImportPreview(null);
     setImportError("");
@@ -335,6 +361,18 @@ export default function JadwalPage() {
 
   async function processImport(action: "preview" | "commit") {
     if (!isAdmin) return;
+
+    if (action === "commit" && importMode === "REPLACE") {
+      const confirmed = window.confirm(
+        `Seluruh jadwal aktif periode ${tahunAjaranImport} Semester ${
+          semesterImport === "GANJIL" ? "Ganjil" : "Genap"
+        } akan dinonaktifkan dan diganti dengan isi file ini. Lanjutkan?`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
 
     if (!importFile) {
       setImportError("Pilih file Excel terlebih dahulu");
@@ -366,9 +404,8 @@ export default function JadwalPage() {
 
       formData.append("file", importFile);
       formData.append("action", action);
-
+      formData.append("mode", importMode);
       formData.append("tahunAjaran", tahunAjaranImport);
-
       formData.append("semester", semesterImport);
 
       const res = await fetch("/api/jadwal/import", {
@@ -452,11 +489,20 @@ export default function JadwalPage() {
 
               <button
                 type="button"
-                onClick={openImportForm}
+                onClick={() => openImportForm("CREATE")}
                 className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20"
               >
                 <Upload size={16} />
-                <span className="hidden sm:inline">Import Excel</span>
+                <span className="hidden sm:inline">Import Baru</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openImportForm("REPLACE")}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200/40 bg-amber-400/20 px-3 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-amber-400/30"
+              >
+                <Pencil size={16} />
+                <span className="hidden sm:inline">Ganti Jadwal</span>
               </button>
 
               <button
@@ -479,10 +525,11 @@ export default function JadwalPage() {
             <button
               key={hari}
               onClick={() => setHariAktif(hari)}
-              className={`flex-1 min-w-[60px] px-3 py-2 rounded-xl text-xs font-semibold transition-all ${hariAktif === hari
-                ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                }`}
+              className={`flex-1 min-w-[60px] px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                hariAktif === hari
+                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              }`}
             >
               {hari}
             </button>
@@ -616,18 +663,19 @@ export default function JadwalPage() {
                                 {j.absensiHariIni ? (
                                   <div>
                                     <span
-                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${j.absensiHariIni.status === "HADIR"
-                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                                        : j.absensiHariIni.status ===
-                                          "TERLAMBAT"
-                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
-                                          : j.absensiHariIni.status === "IZIN"
-                                            ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
-                                            : j.absensiHariIni.status ===
-                                              "SAKIT"
-                                              ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400"
-                                              : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
-                                        }`}
+                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${
+                                        j.absensiHariIni.status === "HADIR"
+                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                          : j.absensiHariIni.status ===
+                                              "TERLAMBAT"
+                                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
+                                            : j.absensiHariIni.status === "IZIN"
+                                              ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
+                                              : j.absensiHariIni.status ===
+                                                  "SAKIT"
+                                                ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400"
+                                                : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
+                                      }`}
                                     >
                                       {j.absensiHariIni.status === "HADIR" ? (
                                         <CheckCircle2 size={10} />
@@ -675,10 +723,11 @@ export default function JadwalPage() {
                                     type="button"
                                     onClick={() => openManualStatus(j)}
                                     disabled={Boolean(j.absensiHariIni)}
-                                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${j.absensiHariIni
-                                      ? "cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800"
-                                      : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400 dark:hover:bg-emerald-900/60"
-                                      }`}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                                      j.absensiHariIni
+                                        ? "cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800"
+                                        : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400 dark:hover:bg-emerald-900/60"
+                                    }`}
                                     title={
                                       j.absensiHariIni
                                         ? "Jadwal ini sudah memiliki absensi"
@@ -731,11 +780,15 @@ export default function JadwalPage() {
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:px-6">
               <div>
                 <h2 className="font-bold text-gray-900 dark:text-gray-100">
-                  Import Jadwal dari Excel
+                  {importMode === "REPLACE"
+                    ? "Ganti Jadwal Periode"
+                    : "Import Jadwal Baru"}
                 </h2>
 
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  Periksa file terlebih dahulu sebelum jadwal disimpan
+                  {importMode === "REPLACE"
+                    ? "Ganti seluruh jadwal aktif pada periode yang dipilih"
+                    : "Tambahkan jadwal baru tanpa menghapus jadwal yang sudah ada"}
                 </p>
               </div>
 
@@ -751,6 +804,26 @@ export default function JadwalPage() {
 
             {/* Isi modal */}
             <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
+              {importMode === "REPLACE" && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                  <AlertTriangle
+                    size={18}
+                    className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
+                  />
+
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                      Seluruh jadwal periode akan diganti
+                    </p>
+
+                    <p className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                      File Excel harus berisi seluruh jadwal untuk tahun ajaran
+                      dan semester yang dipilih. Jadwal aktif sebelumnya akan
+                      dinonaktifkan dan diganti dengan isi file ini.
+                    </p>
+                  </div>
+                </div>
+              )}
               {/* Periode akademik */}
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/40">
                 <div className="mb-4">
@@ -759,8 +832,9 @@ export default function JadwalPage() {
                   </h3>
 
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Semua jadwal dalam satu file akan dimasukkan ke periode yang
-                    sama.
+                    {importMode === "REPLACE"
+                      ? "Jadwal aktif pada periode ini akan diganti menggunakan seluruh isi file."
+                      : "Semua jadwal dalam file akan ditambahkan ke periode yang sama."}
                   </p>
                 </div>
 
@@ -1039,12 +1113,13 @@ export default function JadwalPage() {
 
                             <td className="px-3 py-3">
                               <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${row.status === "VALID"
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                                  : row.status === "DUPLIKAT"
-                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
-                                    : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
-                                  }`}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                                  row.status === "VALID"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                    : row.status === "DUPLIKAT"
+                                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
+                                      : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
+                                }`}
                               >
                                 {row.status === "VALID" ? (
                                   <CheckCircle2 size={10} />
@@ -1089,7 +1164,10 @@ export default function JadwalPage() {
 
               {importPreview?.summary &&
                 importPreview.summary.valid > 0 &&
-                importPreview.summary.imported === undefined && (
+                importPreview.summary.imported === undefined &&
+                (importMode === "CREATE" ||
+                  (importPreview.summary.invalid === 0 &&
+                    importPreview.summary.duplicate === 0)) && (
                   <button
                     type="button"
                     onClick={() => processImport("commit")}
@@ -1099,12 +1177,21 @@ export default function JadwalPage() {
                     {importLoading ? (
                       <>
                         <Loader2 size={15} className="animate-spin" />
-                        Mengimpor...
+                        {importMode === "REPLACE"
+                          ? "Mengganti jadwal..."
+                          : "Mengimpor..."}
                       </>
                     ) : (
                       <>
-                        <Upload size={15} />
-                        Import {importPreview.summary.valid} Jadwal
+                        {importMode === "REPLACE" ? (
+                          <Pencil size={15} />
+                        ) : (
+                          <Upload size={15} />
+                        )}
+
+                        {importMode === "REPLACE"
+                          ? `Ganti dengan ${importPreview.summary.valid} Jadwal`
+                          : `Import ${importPreview.summary.valid} Jadwal`}
                       </>
                     )}
                   </button>

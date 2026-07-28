@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { Prisma } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -9,6 +9,23 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const ROLE_PEMBACA_STAFF = ["ADMIN", "PIMPINAN", "GURU", "STAFF"] as const;
+
+function getSessionRoles(user: { role?: string; roles?: string[] }) {
+  return Array.from(
+    new Set(
+      [user.role, ...(Array.isArray(user.roles) ? user.roles : [])].filter(
+        (role): role is string => typeof role === "string" && role.length > 0,
+      ),
+    ),
+  );
+}
+
+function memilikiSalahSatuRole(
+  userRoles: string[],
+  allowedRoles: readonly string[],
+) {
+  return allowedRoles.some((role) => userRoles.includes(role));
+}
 
 // GET — ambil semua staff aktif
 export async function GET() {
@@ -19,21 +36,30 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (
-      !ROLE_PEMBACA_STAFF.includes(
-        session.user.role as (typeof ROLE_PEMBACA_STAFF)[number],
-      )
-    ) {
+    const userRoles = getSessionRoles(session.user);
+
+    if (!memilikiSalahSatuRole(userRoles, ROLE_PEMBACA_STAFF)) {
       return NextResponse.json(
-        { error: "Anda tidak memiliki akses ke data staff" },
+        {
+          error: "Anda tidak memiliki akses ke data staff",
+        },
         { status: 403 },
       );
     }
 
     const staff = await prisma.user.findMany({
       where: {
-        role: "STAFF",
         aktif: true,
+        OR: [
+          {
+            role: Role.STAFF,
+          },
+          {
+            rolesTambahan: {
+              has: Role.STAFF,
+            },
+          },
+        ],
       },
       select: {
         id: true,
@@ -41,6 +67,8 @@ export async function GET() {
         nip: true,
         noWa: true,
         aktif: true,
+        role: true,
+        rolesTambahan: true,
       },
       orderBy: {
         nama: "asc",
@@ -71,7 +99,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "ADMIN") {
+    const userRoles = getSessionRoles(session.user);
+
+    if (!userRoles.includes(Role.ADMIN)) {
       return NextResponse.json(
         {
           error: "Hanya admin yang dapat menambah staff",
@@ -135,7 +165,8 @@ export async function POST(req: Request) {
         nip,
         noWa,
         password: hashedPassword,
-        role: "STAFF",
+        role: Role.STAFF,
+        rolesTambahan: [],
         aktif: true,
       },
       select: {
@@ -144,6 +175,8 @@ export async function POST(req: Request) {
         nip: true,
         noWa: true,
         aktif: true,
+        role: true,
+        rolesTambahan: true,
       },
     });
 

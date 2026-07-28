@@ -22,6 +22,9 @@ const HARI_VALID = new Set([
 ]);
 
 type ImportAction = "preview" | "commit";
+
+type ImportMode = "CREATE" | "REPLACE";
+
 type StatusBaris = "VALID" | "ERROR" | "DUPLIKAT";
 
 type SlotJadwal = {
@@ -202,10 +205,24 @@ export async function POST(req: Request) {
     const semester = semesterValue as SemesterAkademik;
 
     const file = formData.get("file");
+
     const actionValue = formData.get("action");
+
+    const modeValue = String(formData.get("mode") ?? "CREATE").toUpperCase();
 
     const action: ImportAction =
       actionValue === "commit" ? "commit" : "preview";
+
+    if (modeValue !== "CREATE" && modeValue !== "REPLACE") {
+      return NextResponse.json(
+        {
+          error: "Mode import harus CREATE atau REPLACE",
+        },
+        { status: 400 },
+      );
+    }
+
+    const mode = modeValue as ImportMode;
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -538,17 +555,27 @@ export async function POST(req: Request) {
 
       const exactKey = getExactKey(slot);
 
-      if (exactExistingKeys.has(exactKey) || importedExactKeys.has(exactKey)) {
+      const duplicateDiDatabase =
+        mode === "CREATE" && exactExistingKeys.has(exactKey);
+
+      const duplicateDiFile = importedExactKeys.has(exactKey);
+
+      if (duplicateDiDatabase || duplicateDiFile) {
         previewRows.push({
           ...previewBase,
           status: "DUPLIKAT",
-          errors: ["Jadwal identik sudah tersedia"],
+          errors: [
+            duplicateDiFile
+              ? "Jadwal identik muncul lebih dari sekali dalam file"
+              : "Jadwal identik sudah tersedia",
+          ],
         });
 
         continue;
       }
 
-      const comparisonSlots = [...existingSlots, ...validRows];
+      const comparisonSlots =
+        mode === "CREATE" ? [...existingSlots, ...validRows] : [...validRows];
 
       for (const existing of comparisonSlots) {
         if (existing.hari !== slot.hari) {
@@ -622,19 +649,29 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         action,
+        mode,
+
+        message:
+          mode === "REPLACE"
+            ? "File valid untuk mengganti jadwal periode ini"
+            : "File valid untuk menambahkan jadwal baru",
+
         periode: {
           tahunAjaran,
           semester,
         },
+
         summary,
         rows: previewRows,
       });
     }
 
-    if (validRows.length === 0) {
+    if (mode === "REPLACE" && (summary.invalid > 0 || summary.duplicate > 0)) {
       return NextResponse.json(
         {
-          error: "Tidak ada baris valid yang dapat diimpor",
+          error:
+            "Update jadwal dibatalkan. Semua baris harus valid dan tidak boleh ada duplikat.",
+          mode,
           summary,
           rows: previewRows,
         },
@@ -657,18 +694,56 @@ export async function POST(req: Request) {
       aktif: true,
     }));
 
-    const result = await prisma.jadwal.createMany({
-      data,
+    const commitResult = await prisma.$transaction(async (tx) => {
+      let replaced = 0;
+
+      if (mode === "REPLACE") {
+        const nonaktifkanJadwalLama = await tx.jadwal.updateMany({
+          where: {
+            aktif: true,
+            tahunAjaran,
+            semester,
+          },
+          data: {
+            aktif: false,
+          },
+        });
+
+        replaced = nonaktifkanJadwalLama.count;
+      }
+
+      const buatJadwalBaru = await tx.jadwal.createMany({
+        data,
+      });
+
+      return {
+        imported: buatJadwalBaru.count,
+        replaced,
+      };
     });
+
+    const commitSummary = {
+      ...summary,
+      imported: commitResult.imported,
+      replaced: commitResult.replaced,
+    };
 
     return NextResponse.json({
       success: true,
       action,
+      mode,
+
+      message:
+        mode === "REPLACE"
+          ? `${commitResult.replaced} jadwal lama dinonaktifkan dan ${commitResult.imported} jadwal baru diterapkan`
+          : `${commitResult.imported} jadwal berhasil ditambahkan`,
+
       periode: {
         tahunAjaran,
         semester,
       },
-      summary,
+
+      summary: commitSummary,
       rows: previewRows,
     });
   } catch (error) {

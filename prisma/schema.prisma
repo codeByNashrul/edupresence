@@ -15,6 +15,7 @@ model User {
   password      String
   noWa          String?
   role          Role
+  rolesTambahan Role[]          @default([])
   aktif         Boolean         @default(true)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt

@@ -63,15 +63,24 @@ interface DashboardData {
   totalGuru: number;
   totalStaff: number;
   totalSiswa: number;
+
+  totalPegawaiUnik: number;
+  pegawaiHadirUnik: number;
+  pegawaiTerlambatUnik: number;
+  pegawaiTidakHadirUnik: number;
+
   guruHadir: number;
   guruTerlambat: number;
   guruTidakHadir: number;
+
   staffHadir: number;
   staffTerlambat: number;
   staffTidakHadir: number;
+
   siswaHadir: number;
   siswaTerlambat: number;
   siswaTidakHadir: number;
+
   jadwal: JadwalItem[];
 }
 
@@ -775,11 +784,41 @@ export default function DashboardPage() {
   );
   const [formPengumuman, setFormPengumuman] = useState({ judul: "", isi: "" });
 
-  const role = session?.user?.role ?? "";
-  const isManagement = ["ADMIN", "PIMPINAN"].includes(role);
-  const isStaff = role === "STAFF";
-  const isGuru = role === "GURU";
-  const canScanAbsensi = isGuru || isStaff;
+  const userRoles = useMemo(() => {
+    const roleUtama = session?.user?.role;
+
+    const rolesTambahan = Array.isArray(
+      session?.user?.roles,
+    )
+      ? session.user.roles
+      : [];
+
+    return Array.from(
+      new Set(
+        [roleUtama, ...rolesTambahan].filter(
+          (item): item is string =>
+            typeof item === "string" &&
+            item.length > 0,
+        ),
+      ),
+    );
+  }, [
+    session?.user?.role,
+    session?.user?.roles,
+  ]);
+
+  const hasRole = (targetRole: string) =>
+    userRoles.includes(targetRole);
+
+  const isManagement =
+    hasRole("ADMIN") ||
+    hasRole("PIMPINAN");
+
+  const isStaff = hasRole("STAFF");
+  const isGuru = hasRole("GURU");
+
+  const canScanAbsensi =
+    isGuru || isStaff;
   const today = formatDate(new Date());
   const isToday = selectedDate === today;
 
@@ -1043,11 +1082,22 @@ export default function DashboardPage() {
   const absenPulang = targets.find((item) => item.tipe === "PULANG");
   const userName = session?.user?.name ?? "Pengguna";
 
-  const totalPegawai = (data.totalGuru ?? 0) + (data.totalStaff ?? 0);
+  const totalPegawai =
+    data.totalPegawaiUnik ??
+    ((data.totalGuru ?? 0) +
+      (data.totalStaff ?? 0));
 
-  const guruTercatat = (data.guruHadir ?? 0) + (data.guruTerlambat ?? 0);
+  const pegawaiTercatat =
+    (data.pegawaiHadirUnik ?? 0) +
+    (data.pegawaiTerlambatUnik ?? 0);
 
-  const staffTercatat = (data.staffHadir ?? 0) + (data.staffTerlambat ?? 0);
+  const guruTercatat =
+    (data.guruHadir ?? 0) +
+    (data.guruTerlambat ?? 0);
+
+  const staffTercatat =
+    (data.staffHadir ?? 0) +
+    (data.staffTerlambat ?? 0);
 
   const siswaTercatat = (data.siswaHadir ?? 0) + (data.siswaTerlambat ?? 0);
 
@@ -1124,7 +1174,10 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-indigo-200">Kehadiran pegawai</p>
                     <p className="text-lg font-bold">
-                      {pct(guruTercatat + staffTercatat, totalPegawai)}%
+                      {pct(
+                        pegawaiTercatat,
+                        totalPegawai,
+                      )}%
                     </p>
                   </div>
                 </div>

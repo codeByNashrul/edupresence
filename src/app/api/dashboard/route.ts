@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { HariMinggu, SemesterAkademik } from "@prisma/client";
+import { Role, type HariMinggu, type SemesterAkademik } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -72,15 +72,38 @@ function hitungTidakHadir(total: number, hadir: number, terlambat: number) {
   return Math.max(total - hadir - terlambat, 0);
 }
 
+function userMemilikiRole(
+  user: {
+    role: Role;
+    rolesTambahan: Role[];
+  },
+  targetRole: Role,
+) {
+  return user.role === targetRole || user.rolesTambahan.includes(targetRole);
+}
+
 export async function GET(req: Request) {
   try {
     const session = await auth();
 
-    if (
-      !session?.user ||
-      !["ADMIN", "PIMPINAN", "GURU", "STAFF"].includes(session.user.role)
-    ) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const sessionRoles = Array.from(
+      new Set([
+        session.user.role,
+        ...(Array.isArray(session.user.roles) ? session.user.roles : []),
+      ]),
+    );
+
+    const memilikiRoleSession = (allowedRoles: Role[]) =>
+      allowedRoles.some((allowedRole) => sessionRoles.includes(allowedRole));
+
+    if (
+      !memilikiRoleSession([Role.ADMIN, Role.PIMPINAN, Role.GURU, Role.STAFF])
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -106,18 +129,36 @@ export async function GET(req: Request) {
       totalSiswa,
       absensiSiswaHariIni,
       absensiHariIni,
+      pegawaiAktif,
     ] = await Promise.all([
       prisma.user.count({
         where: {
-          role: "GURU",
           aktif: true,
+          OR: [
+            {
+              role: Role.GURU,
+            },
+            {
+              rolesTambahan: {
+                has: Role.GURU,
+              },
+            },
+          ],
         },
       }),
-
       prisma.user.count({
         where: {
-          role: "STAFF",
           aktif: true,
+          OR: [
+            {
+              role: Role.STAFF,
+            },
+            {
+              rolesTambahan: {
+                has: Role.STAFF,
+              },
+            },
+          ],
         },
       }),
 
@@ -142,17 +183,75 @@ export async function GET(req: Request) {
           tipe: "BERANGKAT",
         },
         select: {
+          userId: true,
           status: true,
           user: {
             select: {
               role: true,
+              rolesTambahan: true,
               aktif: true,
             },
           },
         },
       }),
+      prisma.user.findMany({
+        where: {
+          aktif: true,
+          OR: [
+            {
+              role: {
+                in: [Role.GURU, Role.STAFF],
+              },
+            },
+            {
+              rolesTambahan: {
+                hasSome: [Role.GURU, Role.STAFF],
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+        },
+      }),
     ]);
 
+    const totalPegawaiUnik = pegawaiAktif.length;
+
+    const absensiPegawaiByUser = new Map<
+      string,
+      (typeof absensiHariIni)[number]
+    >();
+
+    for (const absensi of absensiHariIni) {
+      const termasukPegawai =
+        userMemilikiRole(absensi.user, Role.GURU) ||
+        userMemilikiRole(absensi.user, Role.STAFF);
+
+      if (
+        absensi.user.aktif &&
+        termasukPegawai &&
+        !absensiPegawaiByUser.has(absensi.userId)
+      ) {
+        absensiPegawaiByUser.set(absensi.userId, absensi);
+      }
+    }
+
+    const absensiPegawaiUnik = Array.from(absensiPegawaiByUser.values());
+
+    const pegawaiHadirUnik = absensiPegawaiUnik.filter(
+      (absensi) => absensi.status === "HADIR",
+    ).length;
+
+    const pegawaiTerlambatUnik = absensiPegawaiUnik.filter(
+      (absensi) => absensi.status === "TERLAMBAT",
+    ).length;
+
+    const pegawaiTidakHadirUnik = hitungTidakHadir(
+      totalPegawaiUnik,
+      pegawaiHadirUnik,
+      pegawaiTerlambatUnik,
+    );
     /*
      * HADIR dan TERLAMBAT harus dihitung terpisah.
      * Jangan memasukkan TERLAMBAT ke jumlah HADIR.
@@ -168,28 +267,28 @@ export async function GET(req: Request) {
     const guruHadir = absensiHariIni.filter(
       (absensi) =>
         absensi.user.aktif &&
-        absensi.user.role === "GURU" &&
+        userMemilikiRole(absensi.user, Role.GURU) &&
         absensi.status === "HADIR",
     ).length;
 
     const guruTerlambat = absensiHariIni.filter(
       (absensi) =>
         absensi.user.aktif &&
-        absensi.user.role === "GURU" &&
+        userMemilikiRole(absensi.user, Role.GURU) &&
         absensi.status === "TERLAMBAT",
     ).length;
 
     const staffHadir = absensiHariIni.filter(
       (absensi) =>
         absensi.user.aktif &&
-        absensi.user.role === "STAFF" &&
+        userMemilikiRole(absensi.user, Role.STAFF) &&
         absensi.status === "HADIR",
     ).length;
 
     const staffTerlambat = absensiHariIni.filter(
       (absensi) =>
         absensi.user.aktif &&
-        absensi.user.role === "STAFF" &&
+        userMemilikiRole(absensi.user, Role.STAFF) &&
         absensi.status === "TERLAMBAT",
     ).length;
 
@@ -211,9 +310,16 @@ export async function GET(req: Request) {
       siswaTerlambat,
     );
 
+    const dapatMelihatSemuaJadwal = memilikiRoleSession([
+      Role.ADMIN,
+      Role.PIMPINAN,
+    ]);
+
+    const memilikiPeranGuru = memilikiRoleSession([Role.GURU]);
+
     let guruId: string | undefined;
 
-    if (session.user.role === "GURU") {
+    if (memilikiPeranGuru && !dapatMelihatSemuaJadwal) {
       const guru = await prisma.guru.findUnique({
         where: {
           userId: session.user.id,
@@ -228,6 +334,11 @@ export async function GET(req: Request) {
           totalGuru,
           totalStaff,
           totalSiswa,
+
+          totalPegawaiUnik,
+          pegawaiHadirUnik,
+          pegawaiTerlambatUnik,
+          pegawaiTidakHadirUnik,
 
           guruHadir,
           guruTerlambat,
@@ -254,7 +365,7 @@ export async function GET(req: Request) {
     }
 
     const jadwalHariIni =
-      hariIni && session.user.role !== "STAFF"
+      hariIni && (dapatMelihatSemuaJadwal || memilikiPeranGuru)
         ? await prisma.jadwal.findMany({
             where: {
               hari: hariIni,
@@ -343,6 +454,11 @@ export async function GET(req: Request) {
       totalGuru,
       totalStaff,
       totalSiswa,
+
+      totalPegawaiUnik,
+      pegawaiHadirUnik,
+      pegawaiTerlambatUnik,
+      pegawaiTidakHadirUnik,
 
       guruHadir,
       guruTerlambat,

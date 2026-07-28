@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -162,17 +162,73 @@ export default function Sidebar({
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const menu = menuMap[role ?? ""] ?? [];
-  const hasScan = menu.some((item) => item.href === "/scan");
+  /*
+   * Ambil seluruh role dari session.
+   * JWT lama yang belum punya `roles` tetap memakai role utama.
+   */
+  const userRoles = useMemo(() => {
+    const rolesFromSession = Array.isArray(session?.user?.roles)
+      ? session.user.roles
+      : [];
+
+    const sourceRoles =
+      rolesFromSession.length > 0
+        ? rolesFromSession
+        : [role];
+
+    return Array.from(
+      new Set(
+        sourceRoles.filter(
+          (item): item is string =>
+            typeof item === "string" &&
+            item.length > 0,
+        ),
+      ),
+    );
+  }, [role, session?.user?.roles]);
+
+  /*
+   * Gabungkan menu dari semua role dan hapus duplikat
+   * berdasarkan href.
+   */
+  const menu = useMemo(() => {
+    const combinedMenu = userRoles.flatMap(
+      (userRole) => menuMap[userRole] ?? [],
+    );
+
+    return Array.from(
+      new Map(
+        combinedMenu.map(
+          (item) => [item.href, item] as const,
+        ),
+      ).values(),
+    );
+  }, [userRoles]);
+
+  const hasScan = menu.some(
+    (item) => item.href === "/scan",
+  );
+
   const showLabels = isExpanded;
   const collapsed = !showLabels;
-  const hasProfil = ROLES_WITH_PROFIL.includes(role);
-  const homeHref =
-    role === "PIKET"
+
+  const hasProfil = userRoles.some((userRole) =>
+    ROLES_WITH_PROFIL.includes(userRole),
+  );
+
+  const isOrtuOnly =
+    userRoles.length === 1 &&
+    userRoles.includes("ORTU");
+
+  const isPiketOnly =
+    userRoles.length === 1 &&
+    userRoles.includes("PIKET");
+
+  const homeHref = isOrtuOnly
+    ? "/ortu/dashboard"
+    : isPiketOnly
       ? "/piket"
-      : role === "ORTU"
-        ? "/ortu/dashboard"
-        : "/dashboard";
+      : "/dashboard";
 
   const userName = session?.user?.name ?? "";
   const inisial = userName

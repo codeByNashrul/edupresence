@@ -1,19 +1,21 @@
-import NextAuth, { DefaultSession } from "next-auth";
+import type { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
+  interface User {
+    nip: string;
+    role: string;
+    roles: string[];
+    siswaId: string | null;
+  }
+
   interface Session {
     user: {
       id: string;
       nip: string;
       role: string;
-      siswaId: string | null; // ← baru
+      roles: string[];
+      siswaId: string | null;
     } & DefaultSession["user"];
-  }
-  interface User {
-    id: string;
-    nip: string;
-    role: string;
-    siswaId: string | null; // ← baru
   }
 }
 
@@ -22,6 +24,7 @@ declare module "next-auth/jwt" {
     id: string;
     nip: string;
     role: string;
-    siswaId: string | null; // ← baru
+    roles: string[];
+    siswaId: string | null;
   }
 }

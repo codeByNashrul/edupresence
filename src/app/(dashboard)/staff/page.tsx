@@ -15,7 +15,13 @@ import {
   Upload,
   UserCheck,
 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useSession } from "next-auth/react";
 
 interface Staff {
@@ -200,16 +206,41 @@ export default function StaffPage() {
     status: sessionStatus,
   } = useSession();
 
-  const role = session?.user?.role ?? "";
+  const userRoles = useMemo(() => {
+    const roleUtama = session?.user?.role;
 
-  const canViewStaff = [
-    "ADMIN",
-    "PIMPINAN",
-    "GURU",
-    "STAFF",
-  ].includes(role);
+    const rolesSession = Array.isArray(
+      session?.user?.roles,
+    )
+      ? session.user.roles
+      : [];
 
-  const canManageStaff = role === "ADMIN";
+    return Array.from(
+      new Set(
+        [roleUtama, ...rolesSession].filter(
+          (item): item is string =>
+            typeof item === "string" &&
+            item.length > 0,
+        ),
+      ),
+    );
+  }, [
+    session?.user?.role,
+    session?.user?.roles,
+  ]);
+
+  const hasRole = (targetRole: string) =>
+    userRoles.includes(targetRole);
+
+  const canViewStaff =
+    hasRole("ADMIN") ||
+    hasRole("PIMPINAN") ||
+    hasRole("GURU") ||
+    hasRole("STAFF");
+
+  const canManageStaff = hasRole("ADMIN");
+
+  const isStaff = hasRole("STAFF");
 
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -513,7 +544,7 @@ export default function StaffPage() {
 
       {/* Header */}
       {/* ── Header ── */}
-      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-700 to-indigo-700 p-6 text-white shadow-lg shadow-violet-500/20">
+      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-700 to-indigo-700 p-6 text-white shadow-lg shadow-violet-500/20">
         {/* Dekorasi background */}
         <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-white/5 blur-xl" />
@@ -612,19 +643,21 @@ export default function StaffPage() {
 
 
       {/* Info format CSV */}
-      {canManageStaff && (
-        <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
-          <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
-          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-            nama;nip;noWa;password
-          </code>
-          — kolom{" "}
-          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-            noWa
-          </code>{" "}
-          opsional.
-        </div>
-      )}
+      {
+        canManageStaff && (
+          <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
+            <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
+            <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+              nama;nip;noWa;password
+            </code>
+            — kolom{" "}
+            <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+              noWa
+            </code>{" "}
+            opsional.
+          </div>
+        )
+      }
 
       {/* Search */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -785,131 +818,133 @@ export default function StaffPage() {
       </div>
 
       {/* Modal Form */}
-      {canManageStaff && showForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-            <div className="relative overflow-hidden px-6 py-5 border-b border-gray-100 dark:border-gray-800">
-              <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600 opacity-5 dark:opacity-10" />
-              <div className="relative flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center">
-                    <Briefcase
-                      size={18}
-                      className="text-violet-600 dark:text-violet-400"
-                    />
+      {
+        canManageStaff && showForm && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+              <div className="relative overflow-hidden px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600 opacity-5 dark:opacity-10" />
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center">
+                      <Briefcase
+                        size={18}
+                        className="text-violet-600 dark:text-violet-400"
+                      />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                        {editData ? "Edit Staff" : "Tambah Staff"}
+                      </h2>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {editData
+                          ? "Ubah data staff"
+                          : "Tambah staff baru ke sistem"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
-                      {editData ? "Edit Staff" : "Tambah Staff"}
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {editData
-                        ? "Ubah data staff"
-                        : "Tambah staff baru ke sistem"}
-                    </p>
-                  </div>
+                  <button
+                    onClick={() => setShowForm(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                >
-                  <X size={16} />
-                </button>
               </div>
+
+              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Nama
+                  </label>
+                  <input
+                    type="text"
+                    value={form.nama}
+                    onChange={(e) => setForm({ ...form, nama: e.target.value })}
+                    placeholder="Nama lengkap staff"
+                    required
+                    className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    NIP
+                  </label>
+                  <input
+                    type="text"
+                    value={form.nip}
+                    onChange={(e) => setForm({ ...form, nip: e.target.value })}
+                    placeholder="Nomor Induk Pegawai"
+                    required
+                    className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    No. WhatsApp{" "}
+                    <span className="text-gray-400 text-xs">(opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.noWa}
+                    onChange={(e) => setForm({ ...form, noWa: e.target.value })}
+                    placeholder="628xxxxxxxxxx"
+                    className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Password{" "}
+                    {editData && (
+                      <span className="text-gray-400 text-xs">
+                        (kosongkan jika tidak diubah)
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm({ ...form, password: e.target.value })
+                    }
+                    placeholder={editData ? "••••••••" : "Minimal 6 karakter"}
+                    required={!editData}
+                    className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
+                  />
+                </div>
+
+                {formError && (
+                  <div className="flex items-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 px-3.5 py-2.5 rounded-xl text-sm">
+                    <XCircle size={15} className="shrink-0" />
+                    {formError}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="flex-1 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={formLoading}
+                    className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-violet-500/20 transition disabled:opacity-60"
+                  >
+                    {formLoading
+                      ? "Menyimpan..."
+                      : editData
+                        ? "Simpan Perubahan"
+                        : "Tambah Staff"}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nama
-                </label>
-                <input
-                  type="text"
-                  value={form.nama}
-                  onChange={(e) => setForm({ ...form, nama: e.target.value })}
-                  placeholder="Nama lengkap staff"
-                  required
-                  className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  NIP
-                </label>
-                <input
-                  type="text"
-                  value={form.nip}
-                  onChange={(e) => setForm({ ...form, nip: e.target.value })}
-                  placeholder="Nomor Induk Pegawai"
-                  required
-                  className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  No. WhatsApp{" "}
-                  <span className="text-gray-400 text-xs">(opsional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.noWa}
-                  onChange={(e) => setForm({ ...form, noWa: e.target.value })}
-                  placeholder="628xxxxxxxxxx"
-                  className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Password{" "}
-                  {editData && (
-                    <span className="text-gray-400 text-xs">
-                      (kosongkan jika tidak diubah)
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                  placeholder={editData ? "••••••••" : "Minimal 6 karakter"}
-                  required={!editData}
-                  className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
-                />
-              </div>
-
-              {formError && (
-                <div className="flex items-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 px-3.5 py-2.5 rounded-xl text-sm">
-                  <XCircle size={15} className="shrink-0" />
-                  {formError}
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="flex-1 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-violet-500/20 transition disabled:opacity-60"
-                >
-                  {formLoading
-                    ? "Menyimpan..."
-                    : editData
-                      ? "Simpan Perubahan"
-                      : "Tambah Staff"}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
