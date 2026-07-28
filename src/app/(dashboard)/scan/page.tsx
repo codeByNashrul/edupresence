@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 import {
   ScanLine,
@@ -82,6 +83,9 @@ const tipeIcon: Record<string, React.ElementType> = {
 };
 
 export default function ScanPage() {
+  const router = useRouter();
+
+  const redirectTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [hasil, setHasil] = useState<HasilScan | null>(null);
   const [error, setError] = useState("");
@@ -114,9 +118,13 @@ export default function ScanPage() {
 
   useEffect(() => {
     return () => {
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+
       try {
         if (scannerRef.current?.isScanning) {
-          scannerRef.current.stop().catch(() => {});
+          scannerRef.current.stop().catch(() => { });
         }
       } catch {
         /* cleanup */
@@ -152,7 +160,7 @@ export default function ScanPage() {
             setSiapScan(false);
             await kirimAbsensi(decodedText);
           },
-          () => {},
+          () => { },
         );
 
         setIsScanning(true);
@@ -200,7 +208,19 @@ export default function ScanPage() {
 
       setHasil(data);
       setStatus("success");
-      await fetchTargets();
+
+      /*
+       * Memperbarui data target tanpa menahan proses redirect.
+       */
+      void fetchTargets();
+
+      /*
+       * Beri waktu agar guru/staff melihat pesan berhasil,
+       * kemudian kembali ke dashboard.
+       */
+      redirectTimerRef.current = window.setTimeout(() => {
+        router.replace("/dashboard");
+      }, 1800);
     } catch {
       setStatus("error");
       setError("Gagal mengirim data absensi");
@@ -354,11 +374,17 @@ export default function ScanPage() {
             })}
             <button
               type="button"
-              onClick={reset}
+              onClick={() => {
+                if (redirectTimerRef.current !== null) {
+                  window.clearTimeout(redirectTimerRef.current);
+                }
+
+                router.replace("/dashboard");
+              }}
               className="w-full mt-2 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white py-3 rounded-xl font-semibold hover:from-indigo-700 hover:to-violet-700 transition shadow-md"
             >
-              <RotateCcw size={18} />
-              Selesai
+              <CheckCircle2 size={18} />
+              Kembali ke Dashboard
             </button>
           </div>
         </div>
@@ -425,11 +451,10 @@ export default function ScanPage() {
                 <li key={`${item.tipe}-${index}`} className="p-4 sm:p-5">
                   <div className="flex gap-4">
                     <div
-                      className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
-                        done
-                          ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600"
-                          : "bg-gray-100 dark:bg-gray-800 text-gray-400"
-                      }`}
+                      className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${done
+                        ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                        }`}
                     >
                       <TipeIcon size={18} />
                     </div>
