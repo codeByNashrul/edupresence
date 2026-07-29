@@ -130,7 +130,7 @@ export async function GET(req: Request) {
       absensiSiswaHariIni,
       absensiHariIni,
       pegawaiAktif,
-    ] = await Promise.all([
+    ] = await prisma.$transaction([
       prisma.user.count({
         where: {
           aktif: true,
@@ -146,6 +146,7 @@ export async function GET(req: Request) {
           ],
         },
       }),
+
       prisma.user.count({
         where: {
           aktif: true,
@@ -194,6 +195,7 @@ export async function GET(req: Request) {
           },
         },
       }),
+
       prisma.user.findMany({
         where: {
           aktif: true,
