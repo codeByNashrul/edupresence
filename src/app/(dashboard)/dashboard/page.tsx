@@ -38,7 +38,6 @@ import {
   CircleDashed,
   ArrowRight,
 } from "lucide-react";
-import { GuruDashboardBody } from "@/components/dashboard/GuruDashboardBody";
 import { PelanggaranDashboardSection } from "@/components/dashboard/PelanggaranDashboardSection";
 import {
   UpcomingEventsSidebar,
@@ -459,21 +458,34 @@ function CalendarPanel({
   formPengumuman,
   setFormPengumuman,
   simpanPengumuman,
+  showUpcomingEvents = true,
 }: {
   selectedDate: string;
   onSelectDate: (date: string) => void;
   pengumuman: PengumumanItem[];
   canCreatePengumuman: boolean;
-  formPengumuman: { judul: string; isi: string };
+  formPengumuman: {
+    judul: string;
+    isi: string;
+  };
   setFormPengumuman: React.Dispatch<
-    React.SetStateAction<{ judul: string; isi: string }>
+    React.SetStateAction<{
+      judul: string;
+      isi: string;
+    }>
   >;
   simpanPengumuman: () => void;
+  showUpcomingEvents?: boolean;
 }) {
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+
   const [kalenderEvents, setKalenderEvents] = useState<
-    { tanggalMulai: string; tanggalSelesai: string; tipe: string }[]
+    {
+      tanggalMulai: string;
+      tanggalSelesai: string;
+      tipe: string;
+    }[]
   >([]);
 
   const days = useMemo(
@@ -483,24 +495,51 @@ function CalendarPanel({
 
   const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString(
     "id-ID",
-    { month: "long", year: "numeric" },
+    {
+      month: "long",
+      year: "numeric",
+    },
   );
 
-  // Fetch kalender akademik setiap kali tahun berubah
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchKalender() {
       try {
-        const res = await fetch(`/api/kalender-akademik?tahun=${viewYear}`);
-        const data = await res.json();
-        setKalenderEvents(Array.isArray(data) ? data : []);
-      } catch {
-        setKalenderEvents([]);
+        const res = await fetch(`/api/kalender-akademik?tahun=${viewYear}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          if (!cancelled) {
+            setKalenderEvents([]);
+          }
+
+          return;
+        }
+
+        const result = await res.json();
+
+        if (!cancelled) {
+          setKalenderEvents(Array.isArray(result) ? result : []);
+        }
+      } catch (error) {
+        console.error("DASHBOARD_KALENDER_ERROR:", error);
+
+        if (!cancelled) {
+          setKalenderEvents([]);
+        }
       }
     }
-    fetchKalender();
+
+    void fetchKalender();
+
+    return () => {
+      cancelled = true;
+    };
   }, [viewYear]);
 
-  // Cek apakah suatu tanggal punya event
   function getEventOnDate(dateIso: string) {
     return kalenderEvents.filter((event) => {
       const tanggalMulai = event.tanggalMulai.slice(0, 10);
@@ -510,7 +549,6 @@ function CalendarPanel({
     });
   }
 
-  // Dot color per tipe
   const TIPE_DOT: Record<string, string> = {
     LIBUR_NASIONAL: "bg-red-500",
     LIBUR_SEKOLAH: "bg-orange-500",
@@ -522,86 +560,101 @@ function CalendarPanel({
   function prevMonth() {
     if (viewMonth === 0) {
       setViewMonth(11);
-      setViewYear((y) => y - 1);
-    } else setViewMonth((m) => m - 1);
+      setViewYear((currentYear) => currentYear - 1);
+      return;
+    }
+
+    setViewMonth((currentMonth) => currentMonth - 1);
   }
 
   function nextMonth() {
     if (viewMonth === 11) {
       setViewMonth(0);
-      setViewYear((y) => y + 1);
-    } else setViewMonth((m) => m + 1);
+      setViewYear((currentYear) => currentYear + 1);
+      return;
+    }
+
+    setViewMonth((currentMonth) => currentMonth + 1);
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-      {/* ── Kalender ── */}
-      <div className="flex items-center justify-between mb-5">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      <div className="mb-5 flex items-center justify-between">
         <h2 className="font-bold text-gray-900 dark:text-gray-100">Kalender</h2>
+
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={prevMonth}
             aria-label="Bulan sebelumnya"
-            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+            className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
           >
             <ChevronLeft size={16} />
           </button>
-          <span className="text-sm text-gray-500 dark:text-gray-400 min-w-[120px] text-center">
+
+          <span className="min-w-[120px] text-center text-sm text-gray-500 dark:text-gray-400">
             {monthLabel}
           </span>
+
           <button
             type="button"
             onClick={nextMonth}
             aria-label="Bulan berikutnya"
-            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+            className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
           >
             <ChevronRight size={16} />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 text-center text-xs mb-3">
-        {["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((h) => (
-          <div key={h} className="text-gray-400 font-medium">
-            {h}
+      <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs">
+        {["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((hari) => (
+          <div key={hari} className="font-medium text-gray-400">
+            {hari}
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-7 gap-2">
-        {days.map((day, i) => {
-          if (!day) return <div key={i} />;
+        {days.map((day, index) => {
+          if (!day) {
+            return <div key={`empty-${index}`} />;
+          }
+
           const fullDate = new Date(viewYear, viewMonth, day);
           const iso = formatDate(fullDate);
+
           const active = iso === selectedDate;
-          const isToday = iso === formatDate(new Date());
+          const tanggalHariIni = iso === formatDate(new Date());
+
           const dayEvents = getEventOnDate(iso);
-          // Ambil max 2 dot unik tipe
+
           const dots = [
-            ...new Map(dayEvents.map((e) => [e.tipe, e])).values(),
+            ...new Map(dayEvents.map((event) => [event.tipe, event])).values(),
           ].slice(0, 2);
 
           return (
             <button
-              key={i}
+              key={iso}
+              type="button"
               onClick={() => onSelectDate(iso)}
-              className={`relative flex flex-col items-center justify-start pt-1 pb-1 gap-0.5 rounded-xl text-sm font-medium transition aspect-square ${active
+              className={`relative flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl pb-1 pt-1 text-sm font-medium transition ${active
                 ? "bg-indigo-600 text-white"
-                : isToday
+                : tanggalHariIni
                   ? "border border-indigo-400 text-indigo-600 dark:text-indigo-400"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
                 }`}
             >
               <span>{day}</span>
+
               {dots.length > 0 && (
-                <div className="flex gap-0.5 justify-center">
-                  {dots.map((e, di) => (
+                <div className="flex justify-center gap-0.5">
+                  {dots.map((event) => (
                     <span
-                      key={di}
-                      className={`w-1 h-1 rounded-full ${active
+                      key={event.tipe}
+                      className={`h-1 w-1 rounded-full ${active
                         ? "bg-white/80"
-                        : (TIPE_DOT[e.tipe] ?? "bg-gray-400")
+                        : (TIPE_DOT[event.tipe] ?? "bg-gray-400")
                         }`}
                     />
                   ))}
@@ -612,41 +665,50 @@ function CalendarPanel({
         })}
       </div>
 
-      {/* ── Event Mendatang ── */}
-      <UpcomingEventsSidebar />
+      {showUpcomingEvents && <UpcomingEventsSidebar />}
 
-      {/* ── Pengumuman ── */}
-      <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-700">
-        <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-3">
+      <div className="mt-5 border-t border-gray-200 pt-5 dark:border-gray-700">
+        <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
           Pengumuman
         </h3>
+
         {canCreatePengumuman && (
           <div className="mb-4 space-y-2">
             <input
               value={formPengumuman.judul}
-              onChange={(e) =>
-                setFormPengumuman({ ...formPengumuman, judul: e.target.value })
+              onChange={(event) =>
+                setFormPengumuman((current) => ({
+                  ...current,
+                  judul: event.target.value,
+                }))
               }
               placeholder="Judul pengumuman"
-              className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             />
+
             <textarea
               value={formPengumuman.isi}
-              onChange={(e) =>
-                setFormPengumuman({ ...formPengumuman, isi: e.target.value })
+              onChange={(event) =>
+                setFormPengumuman((current) => ({
+                  ...current,
+                  isi: event.target.value,
+                }))
               }
               placeholder="Isi pengumuman"
               rows={3}
-              className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             />
+
             <button
+              type="button"
               onClick={simpanPengumuman}
-              className="w-full bg-indigo-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-indigo-700"
+              className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Tambah Pengumuman
             </button>
           </div>
         )}
+
         <div className="space-y-3">
           {pengumuman.length === 0 ? (
             <p className="text-sm text-gray-400">Belum ada pengumuman</p>
@@ -654,15 +716,17 @@ function CalendarPanel({
             pengumuman.map((item) => (
               <div
                 key={item.id}
-                className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-3"
+                className="rounded-xl bg-indigo-50 p-3 dark:bg-indigo-950/40"
               >
                 <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
                   {item.judul}
                 </p>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
                   {item.isi}
                 </p>
-                <p className="text-[11px] text-gray-400 mt-2">
+
+                <p className="mt-2 text-[11px] text-gray-400">
                   {item.pembuat?.nama ?? "Admin"} ·{" "}
                   {new Date(item.createdAt).toLocaleDateString("id-ID")}
                 </p>
@@ -784,41 +848,32 @@ export default function DashboardPage() {
   );
   const [formPengumuman, setFormPengumuman] = useState({ judul: "", isi: "" });
 
+  const [showUpcomingEvents, setShowUpcomingEvents] = useState(false);
+
   const userRoles = useMemo(() => {
     const roleUtama = session?.user?.role;
 
-    const rolesTambahan = Array.isArray(
-      session?.user?.roles,
-    )
+    const rolesTambahan = Array.isArray(session?.user?.roles)
       ? session.user.roles
       : [];
 
     return Array.from(
       new Set(
         [roleUtama, ...rolesTambahan].filter(
-          (item): item is string =>
-            typeof item === "string" &&
-            item.length > 0,
+          (item): item is string => typeof item === "string" && item.length > 0,
         ),
       ),
     );
-  }, [
-    session?.user?.role,
-    session?.user?.roles,
-  ]);
+  }, [session?.user?.role, session?.user?.roles]);
 
-  const hasRole = (targetRole: string) =>
-    userRoles.includes(targetRole);
+  const hasRole = (targetRole: string) => userRoles.includes(targetRole);
 
-  const isManagement =
-    hasRole("ADMIN") ||
-    hasRole("PIMPINAN");
+  const isManagement = hasRole("ADMIN") || hasRole("PIMPINAN");
 
   const isStaff = hasRole("STAFF");
   const isGuru = hasRole("GURU");
 
-  const canScanAbsensi =
-    isGuru || isStaff;
+  const canScanAbsensi = isGuru || isStaff;
   const today = formatDate(new Date());
   const isToday = selectedDate === today;
 
@@ -839,9 +894,7 @@ export default function DashboardPage() {
         },
       );
 
-      const dashboardData = await dashboardRes
-        .json()
-        .catch(() => null);
+      const dashboardData = await dashboardRes.json().catch(() => null);
 
       if (!dashboardRes.ok) {
         throw new Error(
@@ -856,8 +909,7 @@ export default function DashboardPage() {
         "error" in dashboardData
       ) {
         throw new Error(
-          dashboardData?.error ??
-          "Respons dashboard tidak valid",
+          dashboardData?.error ?? "Respons dashboard tidak valid",
         );
       }
 
@@ -887,48 +939,43 @@ export default function DashboardPage() {
 
     const optionalRequests: Promise<void>[] = [];
 
-    // Pengumuman
-    optionalRequests.push(
-      (async () => {
-        try {
-          const res = await fetch("/api/pengumuman", {
-            cache: "no-store",
-            credentials: "include",
-          });
+    // Pengumuman hanya dibutuhkan ADMIN dan PIMPINAN
+    if (isManagement) {
+      optionalRequests.push(
+        (async () => {
+          try {
+            const res = await fetch("/api/pengumuman", {
+              cache: "no-store",
+              credentials: "include",
+            });
 
-          if (!res.ok) {
+            if (!res.ok) {
+              setPengumuman([]);
+              return;
+            }
+
+            const result = await res.json();
+
+            setPengumuman(Array.isArray(result) ? result : []);
+          } catch (error) {
+            console.error("DASHBOARD_PENGUMUMAN_ERROR:", error);
             setPengumuman([]);
-            return;
           }
-
-          const result = await res.json();
-
-          setPengumuman(
-            Array.isArray(result) ? result : [],
-          );
-        } catch (error) {
-          console.error(
-            "DASHBOARD_PENGUMUMAN_ERROR:",
-            error,
-          );
-
-          setPengumuman([]);
-        }
-      })(),
-    );
+        })(),
+      );
+    } else {
+      setPengumuman([]);
+    }
 
     // Target absensi
     if (canScanAbsensi && isToday) {
       optionalRequests.push(
         (async () => {
           try {
-            const res = await fetch(
-              "/api/absensi/target",
-              {
-                cache: "no-store",
-                credentials: "include",
-              },
-            );
+            const res = await fetch("/api/absensi/target", {
+              cache: "no-store",
+              credentials: "include",
+            });
 
             if (!res.ok) {
               setTargets([]);
@@ -937,14 +984,9 @@ export default function DashboardPage() {
 
             const result = await res.json();
 
-            setTargets(
-              Array.isArray(result) ? result : [],
-            );
+            setTargets(Array.isArray(result) ? result : []);
           } catch (error) {
-            console.error(
-              "DASHBOARD_TARGET_ERROR:",
-              error,
-            );
+            console.error("DASHBOARD_TARGET_ERROR:", error);
 
             setTargets([]);
           }
@@ -975,15 +1017,10 @@ export default function DashboardPage() {
             const result = await res.json();
 
             setCatatanHarian(
-              Array.isArray(result) && result.length > 0
-                ? result[0]
-                : null,
+              Array.isArray(result) && result.length > 0 ? result[0] : null,
             );
           } catch (error) {
-            console.error(
-              "DASHBOARD_CATATAN_ERROR:",
-              error,
-            );
+            console.error("DASHBOARD_CATATAN_ERROR:", error);
 
             setCatatanHarian(null);
           }
@@ -1008,14 +1045,28 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    if (isManagement || loading || !data) {
+      setShowUpcomingEvents(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowUpcomingEvents(true);
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [isManagement, loading, data]);
+
+  useEffect(() => {
     if (sessionStatus === "authenticated") {
-      fetchDashboard();
+      void fetchDashboard();
     }
 
     if (sessionStatus === "unauthenticated") {
       setLoading(false);
     }
-  }, [sessionStatus, selectedDate, isStaff, isGuru, isManagement, isToday]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStatus, selectedDate, session?.user?.id]);
 
   if (loading) {
     return (
@@ -1028,18 +1079,14 @@ export default function DashboardPage() {
   if (!data || "error" in data) {
     return (
       <div className="mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
-        <AlertCircle
-          className="mx-auto mb-3 text-amber-500"
-          size={40}
-        />
+        <AlertCircle className="mx-auto mb-3 text-amber-500" size={40} />
 
         <p className="font-semibold text-gray-900 dark:text-gray-100">
           Gagal memuat dashboard
         </p>
 
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {dashboardError ||
-            "Terjadi gangguan saat mengambil data dashboard."}
+          {dashboardError || "Terjadi gangguan saat mengambil data dashboard."}
         </p>
 
         <button
@@ -1083,21 +1130,14 @@ export default function DashboardPage() {
   const userName = session?.user?.name ?? "Pengguna";
 
   const totalPegawai =
-    data.totalPegawaiUnik ??
-    ((data.totalGuru ?? 0) +
-      (data.totalStaff ?? 0));
+    data.totalPegawaiUnik ?? (data.totalGuru ?? 0) + (data.totalStaff ?? 0);
 
   const pegawaiTercatat =
-    (data.pegawaiHadirUnik ?? 0) +
-    (data.pegawaiTerlambatUnik ?? 0);
+    (data.pegawaiHadirUnik ?? 0) + (data.pegawaiTerlambatUnik ?? 0);
 
-  const guruTercatat =
-    (data.guruHadir ?? 0) +
-    (data.guruTerlambat ?? 0);
+  const guruTercatat = (data.guruHadir ?? 0) + (data.guruTerlambat ?? 0);
 
-  const staffTercatat =
-    (data.staffHadir ?? 0) +
-    (data.staffTerlambat ?? 0);
+  const staffTercatat = (data.staffHadir ?? 0) + (data.staffTerlambat ?? 0);
 
   const siswaTercatat = (data.siswaHadir ?? 0) + (data.siswaTerlambat ?? 0);
 
@@ -1174,10 +1214,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-indigo-200">Kehadiran pegawai</p>
                     <p className="text-lg font-bold">
-                      {pct(
-                        pegawaiTercatat,
-                        totalPegawai,
-                      )}%
+                      {pct(pegawaiTercatat, totalPegawai)}%
                     </p>
                   </div>
                 </div>
@@ -1403,7 +1440,6 @@ export default function DashboardPage() {
           </div>
 
           <PelanggaranDashboardSection />
-
           {/* Jadwal */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/20">
@@ -1510,360 +1546,247 @@ export default function DashboardPage() {
 
   // ─── GURU & STAFF VIEW ───────────────────────────────────────────────────────
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 max-w-[1600px]">
-      <div className="min-w-0">
-        {/* ── Hero Banner ── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 p-6 mb-6 text-white shadow-xl shadow-indigo-500/20">
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white" />
-            <div className="absolute -left-4 bottom-0 w-32 h-32 rounded-full bg-white" />
-          </div>
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <p className="text-indigo-200 text-sm font-medium">
-                {getGreeting()},
-              </p>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <h1 className="text-2xl sm:text-3xl font-bold">{userName}</h1>
-                {isGuru && (
-                  <span className="text-xs font-semibold bg-white/20 backdrop-blur px-2.5 py-1 rounded-full">
-                    Dashboard Guru
-                  </span>
-                )}
-                {isStaff && (
-                  <span className="text-xs font-semibold bg-white/20 backdrop-blur px-2.5 py-1 rounded-full">
-                    Dashboard Staff
-                  </span>
-                )}
-              </div>
-              <p className="text-indigo-100/90 text-sm mt-2 flex items-center gap-2 flex-wrap">
-                <CalendarDays size={14} />
-                {formatTanggalPanjang(selectedDate)}
-                {!isToday && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDate(today)}
-                    className="text-xs bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded-full transition"
-                  >
-                    Kembali ke hari ini
-                  </button>
-                )}
-              </p>
-              {isGuru && slotMengajar > 0 && (
-                <p className="text-sm mt-2 text-indigo-100 font-medium flex items-center gap-2">
-                  <BookOpen size={14} />
-                  Mengajar: {slotSudahScan}/{slotMengajar} Jadwal Sudah Tercatat
-                </p>
-              )}
-            </div>
-            {canScanAbsensi && isToday && (
-              <Link
-                href="/scan"
-                className="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-50 transition shadow-lg shrink-0"
-              >
-                <ScanLine size={18} />
-                Scan Absensi
-              </Link>
-            )}
-          </div>
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 p-6 text-white shadow-xl shadow-indigo-500/20">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute -right-8 -top-8 h-48 w-48 rounded-full bg-white" />
+          <div className="absolute -bottom-8 -left-4 h-32 w-32 rounded-full bg-white" />
         </div>
 
-        {/* ── Absensi harian ── */}
-        {canScanAbsensi && isToday && (
-          <div className="grid sm:grid-cols-2 gap-4 mb-6">
-            <AbsensiCard
-              title="Absen Berangkat"
-              target={absenBerangkat}
-              icon={Sun}
-              href="/scan"
-            />
+        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-indigo-200">
+              {getGreeting()},
+            </p>
 
-            <AbsensiCard
-              title="Absen Pulang"
-              target={absenPulang}
-              icon={Sunset}
-              href="/scan"
-            />
-          </div>
-        )}
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold sm:text-3xl">
+                {userName}
+              </h1>
 
-        {(isGuru || isStaff) && (
-          <div className="mb-6">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="font-bold text-gray-900 dark:text-gray-100">
-                  Direktori Sekolah
-                </h2>
+              {isGuru && (
+                <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold backdrop-blur">
+                  Guru
+                </span>
+              )}
 
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  Data aktif warga sekolah
-                </p>
-              </div>
-
-              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
-                Lihat saja
-              </span>
+              {isStaff && (
+                <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold backdrop-blur">
+                  Staff
+                </span>
+              )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <DirectoryCard
-                title="Guru Aktif"
-                count={data.totalGuru ?? 0}
-                description="Daftar tenaga pengajar"
-                icon={GraduationCap}
-                href="/guru"
-              />
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-indigo-100/90">
+              <CalendarDays size={14} />
+              {formatTanggalPanjang(selectedDate)}
 
-              <DirectoryCard
-                title="Staff Aktif"
-                count={data.totalStaff ?? 0}
-                description="Daftar tenaga kependidikan"
-                icon={Briefcase}
-                href="/staff"
-              />
-
-              <DirectoryCard
-                title="Siswa Aktif"
-                count={data.totalSiswa ?? 0}
-                description="Daftar siswa sekolah"
-                icon={School}
-                href="/siswa"
-              />
-            </div>
-          </div>
-        )}
-
-        {isGuru && <UpcomingEventsInline />}
-
-        {isGuru && (
-          <div className="mb-6">
-            <GuruDashboardBody
-              jadwal={jadwalDashboard.map((j) => ({
-                id: j.id,
-                jamMulai: j.jamMulai,
-                jamSelesai: j.jamSelesai,
-                mapel: j.mapel,
-                kelas: j.kelas,
-                ruangan: j.ruangan,
-                status: j.status,
-                waktuScan: j.waktuScan,
-              }))}
-              targets={isToday ? targets : []}
-              isToday={isToday}
-            />
-          </div>
-        )}
-        <PelanggaranDashboardSection />
-
-        {/* ── Catatan Harian (STAFF only) ── */}
-        {isStaff && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6 shadow-sm">
-            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-950/30">
-              <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <NotebookPen size={18} className="text-indigo-600" />
-                Catatan Harian
-              </h2>
-              <Link
-                href="/catatan-harian"
-                className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1.5 rounded-lg transition"
-              >
-                {catatanHarian ? "Edit Catatan" : "Isi Catatan"}
-              </Link>
-            </div>
-            {catatanHarian ? (
-              <div className="p-5 grid sm:grid-cols-3 gap-4">
-                {[
-                  { key: "Kegiatan", val: catatanHarian.kegiatan },
-                  { key: "Hasil", val: catatanHarian.hasil },
-                  ...(catatanHarian.kendala
-                    ? [{ key: "Kendala", val: catatanHarian.kendala }]
-                    : []),
-                ].map((block) => (
-                  <div
-                    key={block.key}
-                    className="rounded-xl bg-gray-50 dark:bg-gray-900/50 p-4 border border-gray-100 dark:border-gray-700"
-                  >
-                    <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2">
-                      {block.key}
-                    </p>
-                    <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-4">
-                      {block.val}
-                    </p>
-                  </div>
-                ))}
-                {catatanHarian.foto && catatanHarian.foto.length > 0 && (
-                  <div className="sm:col-span-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                      Foto ({catatanHarian.foto.length})
-                    </p>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      {catatanHarian.foto.map((url, i) => (
-                        <a
-                          key={i}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group relative aspect-square rounded-xl overflow-hidden ring-2 ring-transparent hover:ring-indigo-400 transition"
-                        >
-                          <img
-                            src={url}
-                            alt={`Foto ${i + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-10 text-center">
-                <NotebookPen
-                  size={40}
-                  className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
-                />
-                <p className="text-gray-500 text-sm mb-4">
-                  Belum ada catatan hari ini
-                </p>
-                <Link
-                  href="/catatan-harian"
-                  className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-md shadow-indigo-500/25"
+              {!isToday && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(today)}
+                  className="rounded-full bg-white/20 px-2 py-0.5 text-xs transition hover:bg-white/30"
                 >
-                  <NotebookPen size={16} />
-                  Isi Catatan Sekarang
-                </Link>
-              </div>
+                  Kembali ke hari ini
+                </button>
+              )}
+            </p>
+
+            {isGuru && slotMengajar > 0 && (
+              <p className="mt-2 flex items-center gap-2 text-sm font-medium text-indigo-100">
+                <BookOpen size={14} />
+                {slotSudahScan} dari {slotMengajar} jadwal sudah tercatat
+              </p>
             )}
           </div>
-        )}
 
-        {/* ── Jadwal (GURU only) ── */}
-        {isGuru && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/20">
-              <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Clock size={18} className="text-violet-600" />
-                {isToday
-                  ? "Jadwal Mengajar Hari Ini"
-                  : `Jadwal Mengajar ${formatTanggalPanjang(selectedDate)}`}
-              </h2>
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full">
-                {jadwalDashboard.length} slot
-              </span>
-            </div>
-            {jadwalDashboard.length === 0 ? (
-              <div className="p-12 text-center">
-                <CalendarDays
-                  size={40}
-                  className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
-                />
-                <p className="text-gray-500">
-                  Tidak ada jadwal mengajar hari ini
-                </p>
-              </div>
-            ) : (
-              <div className="p-5 space-y-5">
-                {kelasJadwal.map(([kelas, jadwal]) => (
-                  <div
-                    key={kelas}
-                    className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30"
-                  >
-                    <div className="flex items-center justify-between gap-3 px-5 py-3 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                        <GraduationCap size={17} className="text-violet-600" />
-                        Kelas {kelas}
-                      </h3>
-                      <span className="text-xs font-semibold text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-950/50 px-2.5 py-1 rounded-full">
-                        {jadwal.length} slot
-                      </span>
-                    </div>
-
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
-                      {jadwal.map((j) => (
-                        <div
-                          key={j.id}
-                          className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-bold text-gray-900 dark:text-gray-100">
-                              {j.mapel}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
-                              <span className="flex items-center gap-1">
-                                <MapPin size={14} />
-                                {j.ruangan}
-                              </span>
-                              {j.waktuScan && (
-                                <span className="flex items-center gap-1">
-                                  <CheckCircle2 size={14} />
-                                  {["IZIN", "SAKIT", "ALPHA"].includes(j.status)
-                                    ? "Dicatat"
-                                    : "Scan"}{" "}
-                                  {new Date(j.waktuScan).toLocaleTimeString(
-                                    "id-ID",
-                                    {
-                                      timeZone: "Asia/Jakarta",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    },
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0">
-                            <div className="flex items-center gap-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-                              <Clock size={14} />
-                              {j.jamMulai} – {j.jamSelesai}
-                            </div>
-                            <StatusBadge status={j.status} />
-                            {j.status === "BELUM" && isToday && (
-                              <Link
-                                href="/scan"
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
-                              >
-                                Scan sekarang
-                                <ArrowRight size={12} />
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Kalender mobile — hanya tampil di bawah xl */}
-        <div className="block xl:hidden mt-6">
-          <CalendarPanel
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-            pengumuman={pengumuman}
-            canCreatePengumuman={false}
-            formPengumuman={formPengumuman}
-            setFormPengumuman={setFormPengumuman}
-            simpanPengumuman={simpanPengumuman}
-          />
+          {canScanAbsensi && isToday && (
+            <Link
+              href="/scan"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 font-semibold text-indigo-700 shadow-lg transition hover:bg-indigo-50"
+            >
+              <ScanLine size={18} />
+              Scan Absensi
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* ── Sidebar Kalender ── */}
-      <aside className="hidden xl:block sticky top-[96px] self-start max-h-[calc(100vh-120px)] overflow-y-auto">
-        <CalendarPanel
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-          pengumuman={pengumuman}
-          canCreatePengumuman={false}
-          formPengumuman={formPengumuman}
-          setFormPengumuman={setFormPengumuman}
-          simpanPengumuman={simpanPengumuman}
-        />
-      </aside>
+      {/* Absensi berangkat dan pulang */}
+      {canScanAbsensi && isToday && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AbsensiCard
+            title="Absen Berangkat"
+            target={absenBerangkat}
+            icon={Sun}
+            href="/scan"
+          />
+
+          <AbsensiCard
+            title="Absen Pulang"
+            target={absenPulang}
+            icon={Sunset}
+            href="/scan"
+          />
+        </div>
+      )}
+
+      {(isGuru || isStaff) && showUpcomingEvents && (
+        <UpcomingEventsInline />
+      )}
+
+      {/* Jadwal guru */}
+      {isGuru && (
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+            <div>
+              <h2 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100">
+                <Clock size={18} className="text-indigo-600" />
+
+                {isToday
+                  ? "Jadwal Mengajar Hari Ini"
+                  : `Jadwal ${formatTanggalPanjang(selectedDate)}`}
+              </h2>
+
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Jadwal dan status absensi mengajar
+              </p>
+            </div>
+
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+              {jadwalDashboard.length} jadwal
+            </span>
+          </div>
+
+          {jadwalDashboard.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <CalendarDays
+                size={40}
+                className="mx-auto mb-3 text-gray-300 dark:text-gray-600"
+              />
+
+              <p className="text-sm text-gray-500">
+                Tidak ada jadwal mengajar
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {jadwalDashboard.map((jadwal) => (
+                <div
+                  key={jadwal.id}
+                  className="flex flex-col gap-3 px-5 py-4 transition hover:bg-gray-50 dark:hover:bg-gray-900/40 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-900 dark:text-gray-100">
+                      {jadwal.mapel}
+                    </p>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <GraduationCap size={14} />
+                        Kelas {jadwal.kelas}
+                      </span>
+
+                      <span className="flex items-center gap-1">
+                        <MapPin size={14} />
+                        {jadwal.ruangan}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                      <Clock size={14} />
+                      {jadwal.jamMulai} – {jadwal.jamSelesai}
+                    </div>
+
+                    <StatusBadge status={jadwal.status} />
+
+                    {jadwal.status === "BELUM" && isToday && (
+                      <Link
+                        href="/scan"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        Scan
+                        <ArrowRight size={12} />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Catatan harian staff */}
+      {isStaff && (
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+            <div>
+              <h2 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100">
+                <NotebookPen size={18} className="text-indigo-600" />
+                Catatan Harian
+              </h2>
+
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Ringkasan kegiatan staff hari ini
+              </p>
+            </div>
+
+            <Link
+              href="/catatan-harian"
+              className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-400"
+            >
+              {catatanHarian ? "Edit" : "Isi Catatan"}
+            </Link>
+          </div>
+
+          {catatanHarian ? (
+            <div className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                Kegiatan
+              </p>
+
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                {catatanHarian.kegiatan}
+              </p>
+
+              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                Hasil
+              </p>
+
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                {catatanHarian.hasil}
+              </p>
+
+              {catatanHarian.kendala && (
+                <>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-amber-600">
+                    Kendala
+                  </p>
+
+                  <p className="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                    {catatanHarian.kendala}
+                  </p>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="px-5 py-10 text-center">
+              <NotebookPen
+                size={36}
+                className="mx-auto mb-3 text-gray-300 dark:text-gray-600"
+              />
+
+              <p className="text-sm text-gray-500">
+                Belum ada catatan hari ini
+              </p>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
