@@ -123,6 +123,194 @@ export async function GET(req: Request) {
 
     const { tahunAjaran, semester } = getPeriodeAkademik(tanggal);
 
+    const isDashboardManajemen = memilikiRoleSession([
+      Role.ADMIN,
+      Role.PIMPINAN,
+    ]);
+
+    const isGuruSession = memilikiRoleSession([Role.GURU]);
+
+    /*
+     * Guru biasa tidak perlu menjalankan query statistik seluruh sekolah.
+     * ADMIN/PIMPINAN yang juga memiliki role GURU tetap masuk dashboard manajemen.
+     */
+    if (isGuruSession && !isDashboardManajemen) {
+      const guru = await prisma.guru.findUnique({
+        where: {
+          userId: session.user.id,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!guru || !hariIni) {
+        return NextResponse.json({
+          totalGuru: 0,
+          totalStaff: 0,
+          totalSiswa: 0,
+
+          totalPegawaiUnik: 0,
+          pegawaiHadirUnik: 0,
+          pegawaiTerlambatUnik: 0,
+          pegawaiTidakHadirUnik: 0,
+
+          guruHadir: 0,
+          guruTerlambat: 0,
+          guruTidakHadir: 0,
+
+          staffHadir: 0,
+          staffTerlambat: 0,
+          staffTidakHadir: 0,
+
+          siswaHadir: 0,
+          siswaTerlambat: 0,
+          siswaTidakHadir: 0,
+
+          periode: {
+            tahunAjaran,
+            semester,
+          },
+
+          jadwal: [],
+        });
+      }
+
+      const jadwalHariIni = await prisma.jadwal.findMany({
+        where: {
+          guruId: guru.id,
+          hari: hariIni,
+          aktif: true,
+          tahunAjaran,
+          semester,
+        },
+
+        select: {
+          id: true,
+          jamMulai: true,
+          jamSelesai: true,
+
+          guru: {
+            select: {
+              userId: true,
+              user: {
+                select: {
+                  nama: true,
+                  noWa: true,
+                },
+              },
+            },
+          },
+
+          kelas: {
+            select: {
+              nama: true,
+            },
+          },
+
+          mataPelajaran: {
+            select: {
+              nama: true,
+            },
+          },
+
+          ruangan: {
+            select: {
+              nama: true,
+            },
+          },
+        },
+
+        orderBy: {
+          jamMulai: "asc",
+        },
+      });
+
+      const jadwalIds = jadwalHariIni.map((jadwal) => jadwal.id);
+
+      const semuaAbsensiMengajar =
+        jadwalIds.length > 0
+          ? await prisma.absensi.findMany({
+              where: {
+                userId: session.user.id,
+                tipe: "JAM_MENGAJAR",
+                tanggal,
+                jadwalId: {
+                  in: jadwalIds,
+                },
+              },
+
+              select: {
+                jadwalId: true,
+                status: true,
+                waktuScan: true,
+              },
+            })
+          : [];
+
+      const absensiMengajarByJadwal = new Map<
+        string,
+        (typeof semuaAbsensiMengajar)[number]
+      >();
+
+      for (const absensi of semuaAbsensiMengajar) {
+        if (absensi.jadwalId) {
+          absensiMengajarByJadwal.set(absensi.jadwalId, absensi);
+        }
+      }
+
+      const jadwalDenganStatus = jadwalHariIni.map((jadwal) => {
+        const absensi = absensiMengajarByJadwal.get(jadwal.id);
+
+        return {
+          id: jadwal.id,
+          jamMulai: jadwal.jamMulai,
+          jamSelesai: jadwal.jamSelesai,
+
+          guru: jadwal.guru.user.nama,
+          guruId: jadwal.guru.userId,
+          noWa: jadwal.guru.user.noWa,
+
+          mapel: jadwal.mataPelajaran.nama,
+          kelas: jadwal.kelas.nama,
+          ruangan: jadwal.ruangan.nama,
+
+          status: absensi?.status ?? "BELUM",
+          waktuScan: absensi?.waktuScan ?? null,
+        };
+      });
+
+      return NextResponse.json({
+        totalGuru: 0,
+        totalStaff: 0,
+        totalSiswa: 0,
+
+        totalPegawaiUnik: 0,
+        pegawaiHadirUnik: 0,
+        pegawaiTerlambatUnik: 0,
+        pegawaiTidakHadirUnik: 0,
+
+        guruHadir: 0,
+        guruTerlambat: 0,
+        guruTidakHadir: 0,
+
+        staffHadir: 0,
+        staffTerlambat: 0,
+        staffTidakHadir: 0,
+
+        siswaHadir: 0,
+        siswaTerlambat: 0,
+        siswaTidakHadir: 0,
+
+        periode: {
+          tahunAjaran,
+          semester,
+        },
+
+        jadwal: jadwalDenganStatus,
+      });
+    }
+
     const [
       totalGuru,
       totalStaff,
