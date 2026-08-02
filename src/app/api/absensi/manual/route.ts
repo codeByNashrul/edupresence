@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { todayJakarta, nowJakarta, dayJakarta } from "@/lib/time";
-import { HariMinggu, Role, StatusAbsensi } from "@prisma/client";
+import { HariMinggu, Role, StatusAbsensi, SumberAbsensi } from "@prisma/client";
 
 const STATUS_MANUAL: StatusAbsensi[] = [
   StatusAbsensi.HADIR,
@@ -22,12 +22,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userRole = session.user.role as Role | undefined;
+    const sessionRoles = new Set<Role>([
+      session.user.role as Role,
+      ...(Array.isArray(session.user.roles)
+        ? (session.user.roles as Role[])
+        : []),
+    ]);
 
-    if (!userRole || !ROLE_INPUT_MANUAL.has(userRole)) {
+    const bolehInputManual = Array.from(sessionRoles).some((role) =>
+      ROLE_INPUT_MANUAL.has(role),
+    );
+
+    if (!bolehInputManual) {
       return NextResponse.json(
         {
-          error: "Anda tidak memiliki akses untuk menginput absensi manual",
+          error:
+            "Hanya admin dan petugas piket yang dapat menginput absensi manual",
         },
         { status: 403 },
       );
@@ -143,6 +153,9 @@ export async function POST(req: Request) {
         status,
         tanggal,
         waktuScan: nowJakarta(),
+
+        sumber: SumberAbsensi.MANUAL,
+        dicatatOlehId: session.user.id,
       },
     });
 

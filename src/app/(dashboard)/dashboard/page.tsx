@@ -58,6 +58,21 @@ interface JadwalItem {
   waktuScan?: string | null;
 }
 
+interface KehadiranPegawaiSummary {
+  total: number;
+  hadir: number;
+  terlambat: number;
+  izin: number;
+  sakit: number;
+  alpha: number;
+  hadirFisik: number;
+  tercatat: number;
+  belumTercatat: number;
+  tidakHadir: number;
+  persentaseKehadiranFisik: number;
+  persentaseStatusTercatat: number;
+}
+
 interface DashboardData {
   totalGuru: number;
   totalStaff: number;
@@ -68,13 +83,35 @@ interface DashboardData {
   pegawaiTerlambatUnik: number;
   pegawaiTidakHadirUnik: number;
 
+  pegawaiIzinUnik?: number;
+  pegawaiSakitUnik?: number;
+  pegawaiAlphaUnik?: number;
+  pegawaiHadirFisikUnik?: number;
+  pegawaiTercatatUnik?: number;
+  pegawaiBelumTercatatUnik?: number;
+
+  persentaseKehadiranFisik?: number;
+  persentaseStatusTercatat?: number;
+
+  kehadiranPegawai?: KehadiranPegawaiSummary;
+
   guruHadir: number;
   guruTerlambat: number;
   guruTidakHadir: number;
+  guruIzin?: number;
+  guruSakit?: number;
+  guruAlpha?: number;
+  guruTercatat?: number;
+  guruBelumTercatat?: number;
 
   staffHadir: number;
   staffTerlambat: number;
   staffTidakHadir: number;
+  staffIzin?: number;
+  staffSakit?: number;
+  staffAlpha?: number;
+  staffTercatat?: number;
+  staffBelumTercatat?: number;
 
   siswaHadir: number;
   siswaTerlambat: number;
@@ -115,6 +152,9 @@ const CHART_COLORS = {
   staff: "#8b5cf6",
   hadir: "#22c55e",
   terlambat: "#f59e0b",
+  izin: "#3b82f6",
+  sakit: "#8b5cf6",
+  alpha: "#ef4444",
   belum: "#cbd5e1",
 };
 
@@ -282,11 +322,13 @@ function ProgressRing({
   value,
   total,
   color,
+  description,
 }: {
   label: string;
   value: number;
   total: number;
   color: string;
+  description?: string;
 }) {
   const percent = pct(value, total);
   const circumference = 2 * Math.PI * 36;
@@ -327,8 +369,8 @@ function ProgressRing({
       <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mt-2">
         {label}
       </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        {value} / {total} hadir atau terlambat
+      <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+        {description ?? `${value} dari ${total}`}
       </p>
     </div>
   );
@@ -769,6 +811,7 @@ function AbsensiCard({
       badgeClass: "bg-white/20",
       statusIcon: CheckCircle2,
     },
+
     TERLAMBAT: {
       label: "Terlambat",
       gradient:
@@ -777,6 +820,32 @@ function AbsensiCard({
       badgeClass: "bg-white/20",
       statusIcon: AlertCircle,
     },
+
+    IZIN: {
+      label: "Izin",
+      gradient: "bg-gradient-to-br from-blue-500 to-sky-600 shadow-blue-500/25",
+      accent: "text-blue-100",
+      badgeClass: "bg-white/20",
+      statusIcon: AlertCircle,
+    },
+
+    SAKIT: {
+      label: "Sakit",
+      gradient:
+        "bg-gradient-to-br from-violet-500 to-purple-700 shadow-violet-500/25",
+      accent: "text-violet-100",
+      badgeClass: "bg-white/20",
+      statusIcon: AlertCircle,
+    },
+
+    ALPHA: {
+      label: "Alpha",
+      gradient: "bg-gradient-to-br from-red-500 to-rose-700 shadow-red-500/25",
+      accent: "text-red-100",
+      badgeClass: "bg-white/20",
+      statusIcon: AlertCircle,
+    },
+
     BELUM: {
       label: "Belum Scan",
       gradient:
@@ -1126,44 +1195,102 @@ export default function DashboardPage() {
     STATUS_SUDAH_TERCATAT.includes(j.status),
   ).length;
   const absenBerangkat = targets.find((item) => item.tipe === "BERANGKAT");
+
   const absenPulang = targets.find((item) => item.tipe === "PULANG");
+
+  const sedangTidakMasuk = ["IZIN", "SAKIT", "ALPHA"].includes(
+    absenBerangkat?.status ?? "",
+  );
+
   const userName = session?.user?.name ?? "Pengguna";
 
   const totalPegawai =
     data.totalPegawaiUnik ?? (data.totalGuru ?? 0) + (data.totalStaff ?? 0);
 
+  const pegawaiHadir = data.pegawaiHadirUnik ?? 0;
+  const pegawaiTerlambat = data.pegawaiTerlambatUnik ?? 0;
+  const pegawaiIzin = data.pegawaiIzinUnik ?? 0;
+  const pegawaiSakit = data.pegawaiSakitUnik ?? 0;
+  const pegawaiAlpha = data.pegawaiAlphaUnik ?? 0;
+
+  const pegawaiHadirFisik =
+    data.pegawaiHadirFisikUnik ??
+    data.kehadiranPegawai?.hadirFisik ??
+    pegawaiHadir + pegawaiTerlambat;
+
   const pegawaiTercatat =
-    (data.pegawaiHadirUnik ?? 0) + (data.pegawaiTerlambatUnik ?? 0);
+    data.pegawaiTercatatUnik ??
+    data.kehadiranPegawai?.tercatat ??
+    pegawaiHadir + pegawaiTerlambat + pegawaiIzin + pegawaiSakit + pegawaiAlpha;
 
-  const guruTercatat = (data.guruHadir ?? 0) + (data.guruTerlambat ?? 0);
+  const pegawaiBelumTercatat =
+    data.pegawaiBelumTercatatUnik ??
+    data.kehadiranPegawai?.belumTercatat ??
+    Math.max(totalPegawai - pegawaiTercatat, 0);
 
-  const staffTercatat = (data.staffHadir ?? 0) + (data.staffTerlambat ?? 0);
+  const persentaseKehadiranFisik =
+    data.persentaseKehadiranFisik ??
+    data.kehadiranPegawai?.persentaseKehadiranFisik ??
+    pct(pegawaiHadirFisik, totalPegawai);
+
+  const persentaseStatusTercatat =
+    data.persentaseStatusTercatat ??
+    data.kehadiranPegawai?.persentaseStatusTercatat ??
+    pct(pegawaiTercatat, totalPegawai);
+
+  const guruIzin = data.guruIzin ?? 0;
+  const guruSakit = data.guruSakit ?? 0;
+  const guruAlpha = data.guruAlpha ?? 0;
+
+  const guruHadirFisik = (data.guruHadir ?? 0) + (data.guruTerlambat ?? 0);
+
+  const guruTercatat =
+    data.guruTercatat ?? guruHadirFisik + guruIzin + guruSakit + guruAlpha;
+
+  const guruBelumTercatat =
+    data.guruBelumTercatat ?? Math.max((data.totalGuru ?? 0) - guruTercatat, 0);
+
+  const staffIzin = data.staffIzin ?? 0;
+  const staffSakit = data.staffSakit ?? 0;
+  const staffAlpha = data.staffAlpha ?? 0;
+
+  const staffHadirFisik = (data.staffHadir ?? 0) + (data.staffTerlambat ?? 0);
+
+  const staffTercatat =
+    data.staffTercatat ?? staffHadirFisik + staffIzin + staffSakit + staffAlpha;
+
+  const staffBelumTercatat =
+    data.staffBelumTercatat ??
+    Math.max((data.totalStaff ?? 0) - staffTercatat, 0);
 
   const siswaTercatat = (data.siswaHadir ?? 0) + (data.siswaTerlambat ?? 0);
-
-  const pctGuru = pct(guruTercatat, data.totalGuru ?? 0);
-
-  const pctStaff = pct(staffTercatat, data.totalStaff ?? 0);
-
-  const pctSiswa = pct(siswaTercatat, data.totalSiswa ?? 0);
 
   const kehadiranData = [
     {
       name: "Guru",
       Hadir: data.guruHadir ?? 0,
       Terlambat: data.guruTerlambat ?? 0,
-      Belum: data.guruTidakHadir ?? 0,
+      Izin: guruIzin,
+      Sakit: guruSakit,
+      Alpha: guruAlpha,
+      Belum: guruBelumTercatat,
     },
     {
       name: "Staff",
       Hadir: data.staffHadir ?? 0,
       Terlambat: data.staffTerlambat ?? 0,
-      Belum: data.staffTidakHadir ?? 0,
+      Izin: staffIzin,
+      Sakit: staffSakit,
+      Alpha: staffAlpha,
+      Belum: staffBelumTercatat,
     },
     {
       name: "Siswa",
       Hadir: data.siswaHadir ?? 0,
       Terlambat: data.siswaTerlambat ?? 0,
+      Izin: 0,
+      Sakit: 0,
+      Alpha: 0,
       Belum: data.siswaTidakHadir ?? 0,
     },
   ];
@@ -1212,10 +1339,21 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/20">
                   <TrendingUp size={22} className="text-emerald-300 shrink-0" />
                   <div>
-                    <p className="text-xs text-indigo-200">Kehadiran pegawai</p>
+                    <p className="text-xs text-indigo-200">Kehadiran Fisik</p>
                     <p className="text-lg font-bold">
-                      {pct(pegawaiTercatat, totalPegawai)}%
+                      {persentaseKehadiranFisik}%
                     </p>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                    <CheckCircle2 size={22} className="shrink-0 text-sky-300" />
+
+                    <div>
+                      <p className="text-xs text-indigo-200">Status Tercatat</p>
+
+                      <p className="text-lg font-bold">
+                        {persentaseStatusTercatat}%
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/20">
@@ -1260,19 +1398,17 @@ export default function DashboardPage() {
               href="/siswa"
             />
             <StatCard
-              label="Kehadiran Guru"
+              label="Status Guru"
               value={guruTercatat}
-              sub={`${data.guruHadir ?? 0} hadir · ${data.guruTerlambat ?? 0
-                } terlambat`}
+              sub={`${guruBelumTercatat} belum tercatat`}
               icon={UserCheck}
               gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/25"
               accent="text-emerald-100"
             />
             <StatCard
-              label="Kehadiran Staff"
+              label="Status Staff"
               value={staffTercatat}
-              sub={`${data.staffHadir ?? 0} hadir · ${data.staffTerlambat ?? 0
-                } terlambat`}
+              sub={`${staffBelumTercatat} belum tercatat`}
               icon={Users}
               gradient="bg-gradient-to-br from-sky-500 to-blue-600 shadow-sky-500/25"
               accent="text-sky-100"
@@ -1291,48 +1427,63 @@ export default function DashboardPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {[
               {
-                label: "Guru",
-                value: guruTercatat,
-                total: data.totalGuru ?? 0,
+                label: "Kehadiran Fisik Pegawai",
+                value: pegawaiHadirFisik,
+                total: totalPegawai,
                 color: CHART_COLORS.hadir,
-                icon: GraduationCap,
-                iconColor: "text-indigo-600",
+                icon: UserCheck,
+                iconColor: "text-emerald-600",
+                description: `${pegawaiHadir} hadir · ${pegawaiTerlambat} terlambat`,
               },
               {
-                label: "Staff",
-                value: staffTercatat,
-                total: data.totalStaff ?? 0,
-                color: CHART_COLORS.staff,
-                icon: Briefcase,
-                iconColor: "text-violet-600",
+                label: "Status Tercatat Pegawai",
+                value: pegawaiTercatat,
+                total: totalPegawai,
+                color: CHART_COLORS.izin,
+                icon: CheckCircle2,
+                iconColor: "text-blue-600",
+                description: `${pegawaiBelumTercatat} belum tercatat`,
               },
               {
-                label: "Siswa",
+                label: "Kehadiran Siswa",
                 value: siswaTercatat,
                 total: data.totalSiswa ?? 0,
                 color: "#f43f5e",
                 icon: School,
                 iconColor: "text-rose-600",
+                description: `${data.siswaTidakHadir ?? 0} belum/tidak hadir`,
               },
-            ].map(({ label, value, total, color, icon: Icon, iconColor }) => (
-              <div
-                key={label}
-                className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm"
-              >
-                <h2 className="font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-                  <Icon size={18} className={iconColor} />
-                  Tingkat Kehadiran {label}
-                </h2>
-                <div className="flex justify-center">
-                  <ProgressRing
-                    label={label}
-                    value={value}
-                    total={total}
-                    color={color}
-                  />
+            ].map(
+              ({
+                label,
+                value,
+                total,
+                color,
+                icon: Icon,
+                iconColor,
+                description,
+              }) => (
+                <div
+                  key={label}
+                  className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <h2 className="mb-4 flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100">
+                    <Icon size={18} className={iconColor} />
+                    {label}
+                  </h2>
+
+                  <div className="flex justify-center">
+                    <ProgressRing
+                      label={label}
+                      value={value}
+                      total={total}
+                      color={color}
+                      description={description}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-4 mb-6">
@@ -1420,16 +1571,37 @@ export default function DashboardPage() {
                     <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                     <Bar
                       dataKey="Hadir"
+                      stackId="status"
                       fill={CHART_COLORS.hadir}
-                      radius={[6, 6, 0, 0]}
                     />
+
                     <Bar
                       dataKey="Terlambat"
+                      stackId="status"
                       fill={CHART_COLORS.terlambat}
-                      radius={[6, 6, 0, 0]}
                     />
+
+                    <Bar
+                      dataKey="Izin"
+                      stackId="status"
+                      fill={CHART_COLORS.izin}
+                    />
+
+                    <Bar
+                      dataKey="Sakit"
+                      stackId="status"
+                      fill={CHART_COLORS.sakit}
+                    />
+
+                    <Bar
+                      dataKey="Alpha"
+                      stackId="status"
+                      fill={CHART_COLORS.alpha}
+                    />
+
                     <Bar
                       dataKey="Belum"
+                      stackId="status"
                       fill={CHART_COLORS.belum}
                       radius={[6, 6, 0, 0]}
                     />
@@ -1561,9 +1733,7 @@ export default function DashboardPage() {
             </p>
 
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold sm:text-3xl">
-                {userName}
-              </h1>
+              <h1 className="text-2xl font-bold sm:text-3xl">{userName}</h1>
 
               {isGuru && (
                 <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold backdrop-blur">
@@ -1601,7 +1771,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {canScanAbsensi && isToday && (
+          {canScanAbsensi && isToday && !sedangTidakMasuk && (
             <Link
               href="/scan"
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 font-semibold text-indigo-700 shadow-lg transition hover:bg-indigo-50"
@@ -1632,9 +1802,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {(isGuru || isStaff) && showUpcomingEvents && (
-        <UpcomingEventsInline />
-      )}
+      {(isGuru || isStaff) && showUpcomingEvents && <UpcomingEventsInline />}
 
       {/* Jadwal guru */}
       {isGuru && (
@@ -1666,9 +1834,7 @@ export default function DashboardPage() {
                 className="mx-auto mb-3 text-gray-300 dark:text-gray-600"
               />
 
-              <p className="text-sm text-gray-500">
-                Tidak ada jadwal mengajar
-              </p>
+              <p className="text-sm text-gray-500">Tidak ada jadwal mengajar</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
