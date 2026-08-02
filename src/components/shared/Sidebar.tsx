@@ -29,6 +29,7 @@ import {
   FileBadge2,
   CalendarRange,
   UserCircle2,
+  ArrowLeftRight,
 } from "lucide-react";
 
 const menuAdmin = [
@@ -40,6 +41,8 @@ const menuAdmin = [
   { label: "Manajemen Kelas", href: "/kelas" },
   { label: "Manajemen Ruangan", href: "/ruangan" },
   { label: "Jadwal Mata Pelajaran", href: "/jadwal" },
+  { label: "Informasi Tukar Jadwal", href: "/tukar-jadwal" },
+  { label: "Informasi Piket KBM", href: "/piket" },
   { label: "Kalender Akademik", href: "/kalender-akademik" },
   { label: "Kegiatan Siswa", href: "/kegiatan-siswa" },
   { label: "Monitor Izin", href: "/izin/monitor" },
@@ -53,6 +56,7 @@ const menuAdmin = [
 const menuPimpinan = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Jadwal Mata Pelajaran", href: "/jadwal" },
+  { label: "Informasi Tukar Jadwal", href: "/tukar-jadwal" },
   { label: "Kalender Akademik", href: "/kalender-akademik" },
   { label: "Catatan Harian Staff", href: "/catatan-harian/monitor" },
   { label: "E-Learning", href: "https://elearningsmppomosda.sch.id" },
@@ -65,6 +69,7 @@ const menuPimpinan = [
 const menuGuru = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Jadwal Mata Pelajaran", href: "/jadwal" },
+  { label: "Informasi Tukar Jadwal", href: "/tukar-jadwal" },
   { label: "Kalender Akademik", href: "/kalender-akademik" },
   { label: "Scan Absensi", href: "/scan" },
   { label: "E-Learning", href: "https://elearningsmppomosda.sch.id" },
@@ -139,6 +144,7 @@ const iconMap: Record<string, React.ElementType> = {
   "/izin": FileCheck,
   "/izin/monitor": FileCheck,
   "/piket": ClipboardList,
+  "/tukar-jadwal": ArrowLeftRight,
 };
 
 // Role yang punya halaman /profil
@@ -171,14 +177,9 @@ export default function Sidebar({
       ? session.user.roles
       : [];
 
-    const sourceRoles =
-      rolesFromSession.length > 0
-        ? rolesFromSession
-        : [role];
-
     return Array.from(
       new Set(
-        sourceRoles.filter(
+        [role, ...rolesFromSession].filter(
           (item): item is string =>
             typeof item === "string" &&
             item.length > 0,

@@ -9,22 +9,27 @@ datasource db {
 }
 
 model User {
-  id            String          @id @default(cuid())
+  id            String   @id @default(cuid())
   nama          String
-  nip           String          @unique
+  nip           String   @unique
   password      String
   noWa          String?
   role          Role
-  rolesTambahan Role[]          @default([])
-  aktif         Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  absensi       Absensi[]
-  catatanHarian CatatanHarian[]
-  guru          Guru?
-  izin          Izin[]
-  kegiatanStaff KegiatanStaff[]
-  pengumuman    Pengumuman[]
+  rolesTambahan Role[]   @default([])
+  aktif         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  absensi            Absensi[]       @relation("AbsensiPegawai")
+  absensiYangDicatat Absensi[]       @relation("AbsensiDicatatOleh")
+  catatanHarian      CatatanHarian[]
+  guru               Guru?
+  izin               Izin[]
+  kegiatanStaff      KegiatanStaff[]
+  pengumuman         Pengumuman[]
+
+  tukarJadwalDiajukan TukarJadwal[] @relation("UserTukarPengaju")
+  tukarJadwalDiterima TukarJadwal[] @relation("UserTukarPenerima")
 
   @@map("users")
 }
@@ -110,23 +115,75 @@ model Jadwal {
   mataPelajaran   MataPelajaran    @relation(fields: [mataPelajaranId], references: [id])
   ruangan         Ruangan          @relation(fields: [ruanganId], references: [id])
 
+  tukarSebagaiPengaju  TukarJadwal[] @relation("JadwalTukarPengaju")
+  tukarSebagaiPenerima TukarJadwal[] @relation("JadwalTukarPenerima")
+
   @@map("jadwal")
 }
 
-model Absensi {
-  id        String        @id @default(cuid())
-  userId    String
-  ruanganId String?
-  jadwalId  String?
-  tipe      TipeAbsensi
-  status    StatusAbsensi
-  waktuScan DateTime      @default(now())
-  tanggal   DateTime
-  createdAt DateTime      @default(now())
-  jadwal    Jadwal?       @relation(fields: [jadwalId], references: [id])
-  ruangan   Ruangan?      @relation(fields: [ruanganId], references: [id])
-  user      User          @relation(fields: [userId], references: [id])
+model TukarJadwal {
+  id String @id @default(cuid())
 
+  pengajuId  String
+  penerimaId String
+
+  jadwalPengajuId  String
+  jadwalPenerimaId String
+
+  tanggalJadwalPengaju  DateTime
+  tanggalJadwalPenerima DateTime
+
+  status StatusTukarJadwal @default(MENUNGGU)
+
+  ditanggapiAt DateTime?
+  dibatalkanAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pengaju  User @relation("UserTukarPengaju", fields: [pengajuId], references: [id])
+  penerima User @relation("UserTukarPenerima", fields: [penerimaId], references: [id])
+
+  jadwalPengaju  Jadwal @relation("JadwalTukarPengaju", fields: [jadwalPengajuId], references: [id])
+  jadwalPenerima Jadwal @relation("JadwalTukarPenerima", fields: [jadwalPenerimaId], references: [id])
+
+  @@index([pengajuId, status])
+  @@index([penerimaId, status])
+  @@index([jadwalPengajuId, tanggalJadwalPengaju])
+  @@index([jadwalPenerimaId, tanggalJadwalPenerima])
+  @@index([status, tanggalJadwalPengaju])
+  @@index([status, tanggalJadwalPenerima])
+  @@map("tukar_jadwal")
+}
+
+model Absensi {
+  id            String  @id @default(cuid())
+  userId        String
+  ruanganId     String?
+  jadwalId      String?
+  dicatatOlehId String?
+  izinId        String?
+
+  tipe   TipeAbsensi
+  status StatusAbsensi
+  sumber SumberAbsensi @default(QR)
+
+  waktuScan DateTime @default(now())
+  tanggal   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  jadwal  Jadwal?  @relation(fields: [jadwalId], references: [id])
+  ruangan Ruangan? @relation(fields: [ruanganId], references: [id])
+  izin    Izin?    @relation(fields: [izinId], references: [id], onDelete: SetNull)
+
+  user        User  @relation("AbsensiPegawai", fields: [userId], references: [id], onDelete: Cascade)
+  dicatatOleh User? @relation("AbsensiDicatatOleh", fields: [dicatatOlehId], references: [id], onDelete: SetNull)
+
+  @@index([userId, tanggal, tipe])
+  @@index([jadwalId, tanggal])
+  @@index([dicatatOlehId, tanggal])
+  @@index([izinId])
   @@map("absensi")
 }
 
@@ -312,7 +369,9 @@ model Izin {
   status       StatusIzin @default(APPROVED)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  user         User       @relation(fields: [userId], references: [id])
+
+  user    User      @relation(fields: [userId], references: [id])
+  absensi Absensi[]
 
   @@map("izin")
 }
@@ -351,6 +410,12 @@ enum TipeAbsensi {
   PULANG
 }
 
+enum SumberAbsensi {
+  QR
+  MANUAL
+  PERIZINAN
+}
+
 enum HariMinggu {
   SENIN
   SELASA
@@ -385,4 +450,11 @@ enum JenisIzin {
   DINAS_LUAR
   CUTI
   LAINNYA
+}
+
+enum StatusTukarJadwal {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+  DIBATALKAN
 }

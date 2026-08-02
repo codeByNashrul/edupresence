@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { Role, type HariMinggu, type SemesterAkademik } from "@prisma/client";
+import {
+  Role,
+  StatusAbsensi,
+  type HariMinggu,
+  type SemesterAkademik,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getJadwalEfektif } from "@/lib/jadwal-efektif";
 
 function getTanggalJakartaSekarang() {
   return new Intl.DateTimeFormat("sv-SE", {
@@ -71,6 +77,27 @@ function getPeriodeAkademik(tanggal: Date): {
 function hitungTidakHadir(total: number, hadir: number, terlambat: number) {
   return Math.max(total - hadir - terlambat, 0);
 }
+
+function hitungPersentase(jumlah: number, total: number) {
+  if (total <= 0) return 0;
+
+  return Math.round((jumlah / total) * 100);
+}
+
+const EMPTY_KEHADIRAN_PEGAWAI = {
+  total: 0,
+  hadir: 0,
+  terlambat: 0,
+  izin: 0,
+  sakit: 0,
+  alpha: 0,
+  hadirFisik: 0,
+  tercatat: 0,
+  belumTercatat: 0,
+  tidakHadir: 0,
+  persentaseKehadiranFisik: 0,
+  persentaseStatusTercatat: 0,
+};
 
 function userMemilikiRole(
   user: {
@@ -155,6 +182,8 @@ export async function GET(req: Request) {
           pegawaiTerlambatUnik: 0,
           pegawaiTidakHadirUnik: 0,
 
+          kehadiranPegawai: EMPTY_KEHADIRAN_PEGAWAI,
+
           guruHadir: 0,
           guruTerlambat: 0,
           guruTidakHadir: 0,
@@ -176,57 +205,12 @@ export async function GET(req: Request) {
         });
       }
 
-      const jadwalHariIni = await prisma.jadwal.findMany({
-        where: {
-          guruId: guru.id,
-          hari: hariIni,
-          aktif: true,
-          tahunAjaran,
-          semester,
-        },
-
-        select: {
-          id: true,
-          jamMulai: true,
-          jamSelesai: true,
-
-          guru: {
-            select: {
-              userId: true,
-              user: {
-                select: {
-                  nama: true,
-                  noWa: true,
-                },
-              },
-            },
-          },
-
-          kelas: {
-            select: {
-              nama: true,
-            },
-          },
-
-          mataPelajaran: {
-            select: {
-              nama: true,
-            },
-          },
-
-          ruangan: {
-            select: {
-              nama: true,
-            },
-          },
-        },
-
-        orderBy: {
-          jamMulai: "asc",
-        },
+      const jadwalHariIni = await getJadwalEfektif({
+        tanggal,
+        userId: session.user.id,
       });
 
-      const jadwalIds = jadwalHariIni.map((jadwal) => jadwal.id);
+      const jadwalIds = jadwalHariIni.map((jadwal) => jadwal.jadwalId);
 
       const semuaAbsensiMengajar =
         jadwalIds.length > 0
@@ -260,16 +244,16 @@ export async function GET(req: Request) {
       }
 
       const jadwalDenganStatus = jadwalHariIni.map((jadwal) => {
-        const absensi = absensiMengajarByJadwal.get(jadwal.id);
+        const absensi = absensiMengajarByJadwal.get(jadwal.jadwalId);
 
         return {
-          id: jadwal.id,
+          id: jadwal.jadwalId,
           jamMulai: jadwal.jamMulai,
           jamSelesai: jadwal.jamSelesai,
 
-          guru: jadwal.guru.user.nama,
+          guru: jadwal.guru.nama,
           guruId: jadwal.guru.userId,
-          noWa: jadwal.guru.user.noWa,
+          noWa: jadwal.guru.noWa,
 
           mapel: jadwal.mataPelajaran.nama,
           kelas: jadwal.kelas.nama,
@@ -277,6 +261,9 @@ export async function GET(req: Request) {
 
           status: absensi?.status ?? "BELUM",
           waktuScan: absensi?.waktuScan ?? null,
+
+          sumberJadwal: jadwal.sumber,
+          tukar: jadwal.tukar,
         };
       });
 
@@ -289,6 +276,8 @@ export async function GET(req: Request) {
         pegawaiHadirUnik: 0,
         pegawaiTerlambatUnik: 0,
         pegawaiTidakHadirUnik: 0,
+
+        kehadiranPegawai: EMPTY_KEHADIRAN_PEGAWAI,
 
         guruHadir: 0,
         guruTerlambat: 0,
@@ -371,6 +360,9 @@ export async function GET(req: Request) {
           tanggal,
           tipe: "BERANGKAT",
         },
+        orderBy: {
+          createdAt: "desc",
+        },
         select: {
           userId: true,
           status: true,
@@ -429,69 +421,150 @@ export async function GET(req: Request) {
 
     const absensiPegawaiUnik = Array.from(absensiPegawaiByUser.values());
 
-    const pegawaiHadirUnik = absensiPegawaiUnik.filter(
-      (absensi) => absensi.status === "HADIR",
-    ).length;
+    const hitungStatus = (
+      data: typeof absensiPegawaiUnik,
+      status: StatusAbsensi,
+    ) => data.filter((absensi) => absensi.status === status).length;
 
-    const pegawaiTerlambatUnik = absensiPegawaiUnik.filter(
-      (absensi) => absensi.status === "TERLAMBAT",
-    ).length;
-
-    const pegawaiTidakHadirUnik = hitungTidakHadir(
-      totalPegawaiUnik,
-      pegawaiHadirUnik,
-      pegawaiTerlambatUnik,
+    /**
+     * Rekap seluruh pegawai unik.
+     * Satu pegawai hanya dihitung satu kali dari absensi BERANGKAT.
+     */
+    const pegawaiHadirUnik = hitungStatus(
+      absensiPegawaiUnik,
+      StatusAbsensi.HADIR,
     );
-    /*
-     * HADIR dan TERLAMBAT harus dihitung terpisah.
-     * Jangan memasukkan TERLAMBAT ke jumlah HADIR.
+
+    const pegawaiTerlambatUnik = hitungStatus(
+      absensiPegawaiUnik,
+      StatusAbsensi.TERLAMBAT,
+    );
+
+    const pegawaiIzinUnik = hitungStatus(
+      absensiPegawaiUnik,
+      StatusAbsensi.IZIN,
+    );
+
+    const pegawaiSakitUnik = hitungStatus(
+      absensiPegawaiUnik,
+      StatusAbsensi.SAKIT,
+    );
+
+    const pegawaiAlphaUnik = hitungStatus(
+      absensiPegawaiUnik,
+      StatusAbsensi.ALPHA,
+    );
+
+    const pegawaiHadirFisikUnik = pegawaiHadirUnik + pegawaiTerlambatUnik;
+
+    const pegawaiTercatatUnik = absensiPegawaiUnik.length;
+
+    const pegawaiBelumTercatatUnik = Math.max(
+      totalPegawaiUnik - pegawaiTercatatUnik,
+      0,
+    );
+
+    /**
+     * Tidak hadir fisik mencakup:
+     * IZIN + SAKIT + ALPHA + BELUM TERCATAT.
+     */
+    const pegawaiTidakHadirUnik = Math.max(
+      totalPegawaiUnik - pegawaiHadirFisikUnik,
+      0,
+    );
+
+    const persentaseKehadiranFisik = hitungPersentase(
+      pegawaiHadirFisikUnik,
+      totalPegawaiUnik,
+    );
+
+    const persentaseStatusTercatat = hitungPersentase(
+      pegawaiTercatatUnik,
+      totalPegawaiUnik,
+    );
+
+    const kehadiranPegawai = {
+      total: totalPegawaiUnik,
+
+      hadir: pegawaiHadirUnik,
+      terlambat: pegawaiTerlambatUnik,
+      izin: pegawaiIzinUnik,
+      sakit: pegawaiSakitUnik,
+      alpha: pegawaiAlphaUnik,
+
+      hadirFisik: pegawaiHadirFisikUnik,
+      tercatat: pegawaiTercatatUnik,
+      belumTercatat: pegawaiBelumTercatatUnik,
+      tidakHadir: pegawaiTidakHadirUnik,
+
+      persentaseKehadiranFisik,
+      persentaseStatusTercatat,
+    };
+
+    /**
+     * Rekap siswa tetap seperti sebelumnya.
      */
     const siswaHadir = absensiSiswaHariIni.filter(
-      (absensi) => absensi.status === "HADIR",
+      (absensi) => absensi.status === StatusAbsensi.HADIR,
     ).length;
 
     const siswaTerlambat = absensiSiswaHariIni.filter(
-      (absensi) => absensi.status === "TERLAMBAT",
+      (absensi) => absensi.status === StatusAbsensi.TERLAMBAT,
     ).length;
 
-    const guruHadir = absensiHariIni.filter(
-      (absensi) =>
-        absensi.user.aktif &&
-        userMemilikiRole(absensi.user, Role.GURU) &&
-        absensi.status === "HADIR",
-    ).length;
-
-    const guruTerlambat = absensiHariIni.filter(
-      (absensi) =>
-        absensi.user.aktif &&
-        userMemilikiRole(absensi.user, Role.GURU) &&
-        absensi.status === "TERLAMBAT",
-    ).length;
-
-    const staffHadir = absensiHariIni.filter(
-      (absensi) =>
-        absensi.user.aktif &&
-        userMemilikiRole(absensi.user, Role.STAFF) &&
-        absensi.status === "HADIR",
-    ).length;
-
-    const staffTerlambat = absensiHariIni.filter(
-      (absensi) =>
-        absensi.user.aktif &&
-        userMemilikiRole(absensi.user, Role.STAFF) &&
-        absensi.status === "TERLAMBAT",
-    ).length;
-
-    const guruTidakHadir = hitungTidakHadir(
-      totalGuru,
-      guruHadir,
-      guruTerlambat,
+    /**
+     * Rekap guru memakai data pegawai yang sudah dibuat unik.
+     */
+    const absensiGuruUnik = absensiPegawaiUnik.filter((absensi) =>
+      userMemilikiRole(absensi.user, Role.GURU),
     );
 
-    const staffTidakHadir = hitungTidakHadir(
-      totalStaff,
-      staffHadir,
-      staffTerlambat,
+    const guruHadir = hitungStatus(absensiGuruUnik, StatusAbsensi.HADIR);
+
+    const guruTerlambat = hitungStatus(
+      absensiGuruUnik,
+      StatusAbsensi.TERLAMBAT,
+    );
+
+    const guruIzin = hitungStatus(absensiGuruUnik, StatusAbsensi.IZIN);
+
+    const guruSakit = hitungStatus(absensiGuruUnik, StatusAbsensi.SAKIT);
+
+    const guruAlpha = hitungStatus(absensiGuruUnik, StatusAbsensi.ALPHA);
+
+    const guruTercatat = absensiGuruUnik.length;
+
+    const guruBelumTercatat = Math.max(totalGuru - guruTercatat, 0);
+
+    const guruTidakHadir = Math.max(totalGuru - guruHadir - guruTerlambat, 0);
+
+    /**
+     * Rekap staff memakai data pegawai yang sudah dibuat unik.
+     */
+    const absensiStaffUnik = absensiPegawaiUnik.filter((absensi) =>
+      userMemilikiRole(absensi.user, Role.STAFF),
+    );
+
+    const staffHadir = hitungStatus(absensiStaffUnik, StatusAbsensi.HADIR);
+
+    const staffTerlambat = hitungStatus(
+      absensiStaffUnik,
+      StatusAbsensi.TERLAMBAT,
+    );
+
+    const staffIzin = hitungStatus(absensiStaffUnik, StatusAbsensi.IZIN);
+
+    const staffSakit = hitungStatus(absensiStaffUnik, StatusAbsensi.SAKIT);
+
+    const staffAlpha = hitungStatus(absensiStaffUnik, StatusAbsensi.ALPHA);
+
+    const staffTercatat = absensiStaffUnik.length;
+
+    const staffBelumTercatat = Math.max(totalStaff - staffTercatat, 0);
+
+    const staffTidakHadir = Math.max(
+      totalStaff - staffHadir - staffTerlambat,
+      0,
     );
 
     const siswaTidakHadir = hitungTidakHadir(
@@ -505,90 +578,14 @@ export async function GET(req: Request) {
       Role.PIMPINAN,
     ]);
 
-    const memilikiPeranGuru = memilikiRoleSession([Role.GURU]);
-
-    let guruId: string | undefined;
-
-    if (memilikiPeranGuru && !dapatMelihatSemuaJadwal) {
-      const guru = await prisma.guru.findUnique({
-        where: {
-          userId: session.user.id,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!guru) {
-        return NextResponse.json({
-          totalGuru,
-          totalStaff,
-          totalSiswa,
-
-          totalPegawaiUnik,
-          pegawaiHadirUnik,
-          pegawaiTerlambatUnik,
-          pegawaiTidakHadirUnik,
-
-          guruHadir,
-          guruTerlambat,
-          guruTidakHadir,
-
-          staffHadir,
-          staffTerlambat,
-          staffTidakHadir,
-
-          siswaHadir,
-          siswaTerlambat,
-          siswaTidakHadir,
-
-          periode: {
-            tahunAjaran,
-            semester,
-          },
-
-          jadwal: [],
-        });
-      }
-
-      guruId = guru.id;
-    }
-
     const jadwalHariIni =
-      hariIni && (dapatMelihatSemuaJadwal || memilikiPeranGuru)
-        ? await prisma.jadwal.findMany({
-            where: {
-              hari: hariIni,
-              aktif: true,
-
-              tahunAjaran,
-              semester,
-
-              ...(guruId
-                ? {
-                    guruId,
-                  }
-                : {}),
-            },
-
-            include: {
-              guru: {
-                include: {
-                  user: true,
-                },
-              },
-              kelas: true,
-              mataPelajaran: true,
-              ruangan: true,
-            },
-
-            orderBy: {
-              jamMulai: "asc",
-            },
+      hariIni && dapatMelihatSemuaJadwal
+        ? await getJadwalEfektif({
+            tanggal,
           })
         : [];
 
-    const jadwalIds = jadwalHariIni.map((jadwal) => jadwal.id);
+    const jadwalIds = jadwalHariIni.map((jadwal) => jadwal.jadwalId);
 
     const semuaAbsensiMengajar =
       jadwalIds.length > 0
@@ -619,17 +616,17 @@ export async function GET(req: Request) {
 
     const jadwalDenganStatus = jadwalHariIni.map((jadwal) => {
       const absensi = absensiMengajarByJadwal.get(
-        `${jadwal.guru.userId}:${jadwal.id}`,
+        `${jadwal.guru.userId}:${jadwal.jadwalId}`,
       );
 
       return {
-        id: jadwal.id,
+        id: jadwal.jadwalId,
         jamMulai: jadwal.jamMulai,
         jamSelesai: jadwal.jamSelesai,
 
-        guru: jadwal.guru.user.nama,
+        guru: jadwal.guru.nama,
         guruId: jadwal.guru.userId,
-        noWa: jadwal.guru.user.noWa,
+        noWa: jadwal.guru.noWa,
 
         mapel: jadwal.mataPelajaran.nama,
         kelas: jadwal.kelas.nama,
@@ -637,6 +634,9 @@ export async function GET(req: Request) {
 
         status: absensi?.status ?? "BELUM",
         waktuScan: absensi?.waktuScan ?? null,
+
+        sumberJadwal: jadwal.sumber,
+        tukar: jadwal.tukar,
       };
     });
 
@@ -650,13 +650,35 @@ export async function GET(req: Request) {
       pegawaiTerlambatUnik,
       pegawaiTidakHadirUnik,
 
+      pegawaiIzinUnik,
+      pegawaiSakitUnik,
+      pegawaiAlphaUnik,
+      pegawaiHadirFisikUnik,
+      pegawaiTercatatUnik,
+      pegawaiBelumTercatatUnik,
+
+      persentaseKehadiranFisik,
+      persentaseStatusTercatat,
+
+      kehadiranPegawai,
+
       guruHadir,
       guruTerlambat,
       guruTidakHadir,
+      guruIzin,
+      guruSakit,
+      guruAlpha,
+      guruTercatat,
+      guruBelumTercatat,
 
       staffHadir,
       staffTerlambat,
       staffTidakHadir,
+      staffIzin,
+      staffSakit,
+      staffAlpha,
+      staffTercatat,
+      staffBelumTercatat,
 
       siswaHadir,
       siswaTerlambat,
