@@ -65,8 +65,12 @@ function normalizeDateKey(value: unknown) {
   return key;
 }
 
-function jakartaDateFromKey(key: string) {
-  return new Date(`${key}T00:00:00.000+07:00`);
+/**
+ * Semua kolom tanggal harian di database disimpan
+ * sebagai UTC pukul 00.00 agar konsisten dengan todayJakarta().
+ */
+function dateFromKey(key: string) {
+  return new Date(`${key}T00:00:00.000Z`);
 }
 
 function getDateKeysInclusive(startKey: string, endKey: string) {
@@ -160,8 +164,8 @@ export async function GET(req: Request) {
         .toISOString()
         .slice(0, 10);
 
-      const awalBulan = jakartaDateFromKey(awalBulanKey);
-      const awalBulanBerikutnya = jakartaDateFromKey(awalBulanBerikutnyaKey);
+      const awalBulan = dateFromKey(awalBulanKey);
+      const awalBulanBerikutnya = dateFromKey(awalBulanBerikutnyaKey);
 
       /**
        * Menampilkan semua izin yang bersinggungan dengan bulan terpilih.
@@ -319,8 +323,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const tanggalMulai = jakartaDateFromKey(tanggalMulaiKey);
-    const tanggalAkhir = jakartaDateFromKey(tanggalAkhirKey);
+    const tanggalMulai = dateFromKey(tanggalMulaiKey);
+    const tanggalAkhir = dateFromKey(tanggalAkhirKey);
 
     const statusAbsensi =
       jenisIzin === JenisIzin.SAKIT ? StatusAbsensi.SAKIT : StatusAbsensi.IZIN;
@@ -354,7 +358,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const tanggalAbsensi = tanggalKeys.map(jakartaDateFromKey);
+      const tanggalAbsensi = tanggalKeys.map(dateFromKey);
 
       /**
        * Jangan menimpa absensi QR/manual yang sudah ada.
@@ -457,7 +461,7 @@ export async function POST(req: Request) {
       const waktuPencatatan = nowJakarta();
 
       const dataAbsensi = tanggalKeys.flatMap((tanggalKey) => {
-        const tanggal = jakartaDateFromKey(tanggalKey);
+        const tanggal = dateFromKey(tanggalKey);
         const hari = getHariMinggu(tanggalKey);
 
         const absensiHariIni = [

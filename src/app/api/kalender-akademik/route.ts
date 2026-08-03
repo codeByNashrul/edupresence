@@ -10,11 +10,22 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const tahun = searchParams.get("tahun");
 
-    const where = tahun
+    const tahunNumber = tahun ? Number(tahun) : null;
+
+    if (
+      tahun &&
+      (!Number.isInteger(tahunNumber) ||
+        tahunNumber! < 2000 ||
+        tahunNumber! > 2100)
+    ) {
+      return NextResponse.json({ error: "Tahun tidak valid" }, { status: 400 });
+    }
+
+    const where = tahunNumber
       ? {
           tanggalMulai: {
-            gte: new Date(`${tahun}-01-01`),
-            lte: new Date(`${tahun}-12-31`),
+            gte: new Date(`${tahunNumber}-01-01T00:00:00.000Z`),
+            lt: new Date(`${tahunNumber + 1}-01-01T00:00:00.000Z`),
           },
         }
       : {};

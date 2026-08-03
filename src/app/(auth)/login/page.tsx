@@ -6,14 +6,16 @@ import { useRouter } from "next/navigation";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import Image from "next/image";
 import {
-  LogIn,
-  User,
-  Lock,
   AlertCircle,
-  Loader2,
+  Eye,
+  EyeOff,
   GraduationCap,
-  Shield,
+  Loader2,
+  Lock,
+  LogIn,
   ScanLine,
+  Shield,
+  User,
   Users,
 } from "lucide-react";
 
@@ -30,6 +32,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<LoginMode>("staff");
   const [identifier, setIdentifier] = useState(""); // NIP atau NIS
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -38,6 +41,7 @@ export default function LoginPage() {
     setMode(m);
     setIdentifier("");
     setPassword("");
+    setShowPassword(false);
     setError("");
   }
 
@@ -58,7 +62,9 @@ export default function LoginPage() {
 
     if (res?.error) {
       setError(
-        mode === "ortu" ? "NIS atau password salah" : "NIP atau password salah",
+        mode === "ortu"
+          ? "NIS atau password salah"
+          : "Username atau password salah",
       );
       setLoading(false);
       return;
@@ -77,6 +83,7 @@ export default function LoginPage() {
 
     setLoading(false);
   }
+
   const inputClass =
     "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/80 text-gray-900 dark:text-gray-100 pl-11 pr-4 py-3.5 text-base sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition";
 
@@ -189,8 +196,8 @@ export default function LoginPage() {
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 <span className="lg:hidden">
                   {isOrtu
-                    ? "Gunakan NIS anak dan password Anda"
-                    : "Gunakan NIP dan password Anda"}
+                    ? "Gunakan Nomor Induk Siswa dan password Anda"
+                    : "Gunakan User Name dan password Anda"}
                 </span>
                 <span className="hidden lg:inline">
                   SMP POMOSDA · School Management System
@@ -216,10 +223,11 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => switchMode("staff")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${!isOrtu
-                  ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                  }`}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                  !isOrtu
+                    ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
               >
                 <Shield size={15} />
                 Guru / Staff
@@ -227,10 +235,11 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => switchMode("ortu")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${isOrtu
-                  ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                  }`}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                  isOrtu
+                    ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
               >
                 <Users size={15} />
                 Orang Tua
@@ -243,7 +252,7 @@ export default function LoginPage() {
                   htmlFor="identifier"
                   className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
                 >
-                  {isOrtu ? "NIS Anak" : "NIP"}
+                  {isOrtu ? "Nomor Induk Siswa" : "User Name"}
                 </label>
                 <div className="relative">
                   <User
@@ -256,46 +265,56 @@ export default function LoginPage() {
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     className={inputClass}
-                    placeholder={isOrtu ? "Masukkan NIS anak" : "Masukkan NIP"}
+                    placeholder={
+                      isOrtu
+                        ? "Masukkan Nomor Induk Siswa"
+                        : "Masukkan User Name"
+                    }
                     autoComplete="username"
                     required
                   />
                 </div>
-                {isOrtu && (
-                  <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                    NIS anak tercantum di kartu pelajar atau buku raport
-                  </p>
-                )}
               </div>
 
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
+                  className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-gray-300"
                 >
                   Password
                 </label>
+
                 <div className="relative">
                   <Lock
                     size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
                   />
+
                   <input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={inputClass}
+                    onChange={(event) => setPassword(event.target.value)}
                     placeholder="Masukkan password"
                     autoComplete="current-password"
                     required
+                    className={`${inputClass} pr-12`}
                   />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={
+                      showPassword
+                        ? "Sembunyikan password"
+                        : "Tampilkan password"
+                    }
+                    aria-pressed={showPassword}
+                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-gray-400 transition hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:hover:text-indigo-400"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
-                {isOrtu && (
-                  <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                    Password diberikan oleh admin sekolah
-                  </p>
-                )}
               </div>
 
               {error && (

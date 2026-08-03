@@ -16,11 +16,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TipeKalender =
-  | "LIBUR_NASIONAL"
-  | "LIBUR_SEKOLAH"
-  | "UJIAN"
-  | "KEGIATAN"
-  | "SEMESTER";
+  "LIBUR_NASIONAL" | "LIBUR_SEKOLAH" | "UJIAN" | "KEGIATAN" | "SEMESTER";
 
 interface KalenderEvent {
   id: string;
@@ -89,8 +85,7 @@ const TIPE_GURU: TipeKalender[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatSingkat(iso: string): string {
-  return new Date(iso).toLocaleDateString("id-ID", {
-    // ← hapus + "T12:00:00"
+  return dateFromIsoDate(iso).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "short",
   });
@@ -98,10 +93,11 @@ function formatSingkat(iso: string): string {
 
 function hariLagi(iso: string): number {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(iso); // ← hapus + "T00:00:00"
-  target.setHours(0, 0, 0, 0);
-  return Math.ceil(
+  today.setHours(12, 0, 0, 0);
+
+  const target = dateFromIsoDate(iso);
+
+  return Math.round(
     (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
   );
 }
@@ -113,6 +109,18 @@ function labelHariLagi(iso: string): { text: string; urgent: boolean } {
   if (hari === 1) return { text: "Besok", urgent: true };
   if (hari <= 7) return { text: `${hari} hari lagi`, urgent: true };
   return { text: `${hari} hari lagi`, urgent: false };
+}
+
+function getDateKey(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function dateFromIsoDate(iso: string): Date {
+  return new Date(`${getDateKey(iso)}T12:00:00`);
+}
+
+function endOfDateFromIso(iso: string): Date {
+  return new Date(`${getDateKey(iso)}T23:59:59`);
 }
 
 // ─── Sidebar Variant (Admin & Pimpinan — masuk ke CalendarPanel) ───────────────
@@ -242,7 +250,7 @@ export function UpcomingEventsInline() {
 
         const upcoming: KalenderEvent[] = (Array.isArray(data) ? data : [])
           .filter((e: KalenderEvent) => {
-            const selesai = new Date(e.tanggalSelesai + "T23:59:59");
+            const selesai = endOfDateFromIso(e.tanggalSelesai);
             return selesai >= today && TIPE_GURU.includes(e.tipe);
           })
           .sort(
@@ -291,8 +299,9 @@ export function UpcomingEventsInline() {
             const cfg = TIPE_CONFIG[e.tipe];
             const Icon = cfg.icon;
             const { text: hariText, urgent } = labelHariLagi(e.tanggalMulai);
-            const mulai = new Date(e.tanggalMulai + "T12:00:00");
-            const selesai = new Date(e.tanggalSelesai + "T12:00:00");
+            const mulai = dateFromIsoDate(e.tanggalMulai);
+
+            const selesai = dateFromIsoDate(e.tanggalSelesai);
             const multiDay = mulai.toDateString() !== selesai.toDateString();
 
             return (

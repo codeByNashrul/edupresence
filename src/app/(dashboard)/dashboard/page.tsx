@@ -220,10 +220,11 @@ function StatCard({
 }) {
   const content = (
     <div
-      className={`relative h-full overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient} ${href
-        ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-xl"
-        : ""
-        }`}
+      className={`relative h-full overflow-hidden rounded-2xl p-5 text-white shadow-lg ${gradient} ${
+        href
+          ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-xl"
+          : ""
+      }`}
     >
       <div className="absolute -right-3 -top-3 opacity-20">
         <Icon size={72} strokeWidth={1.5} />
@@ -680,12 +681,13 @@ function CalendarPanel({
               key={iso}
               type="button"
               onClick={() => onSelectDate(iso)}
-              className={`relative flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl pb-1 pt-1 text-sm font-medium transition ${active
-                ? "bg-indigo-600 text-white"
-                : tanggalHariIni
-                  ? "border border-indigo-400 text-indigo-600 dark:text-indigo-400"
-                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                }`}
+              className={`relative flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl pb-1 pt-1 text-sm font-medium transition ${
+                active
+                  ? "bg-indigo-600 text-white"
+                  : tanggalHariIni
+                    ? "border border-indigo-400 text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+              }`}
             >
               <span>{day}</span>
 
@@ -694,10 +696,11 @@ function CalendarPanel({
                   {dots.map((event) => (
                     <span
                       key={event.tipe}
-                      className={`h-1 w-1 rounded-full ${active
-                        ? "bg-white/80"
-                        : (TIPE_DOT[event.tipe] ?? "bg-gray-400")
-                        }`}
+                      className={`h-1 w-1 rounded-full ${
+                        active
+                          ? "bg-white/80"
+                          : (TIPE_DOT[event.tipe] ?? "bg-gray-400")
+                      }`}
                     />
                   ))}
                 </div>
@@ -943,6 +946,14 @@ export default function DashboardPage() {
   const isGuru = hasRole("GURU");
 
   const canScanAbsensi = isGuru || isStaff;
+
+  const sessionRolesKey = userRoles.slice().sort().join("|");
+
+  const sessionReady =
+    sessionStatus === "authenticated" &&
+    Boolean(session?.user?.id) &&
+    userRoles.length > 0;
+
   const today = formatDate(new Date());
   const isToday = selectedDate === today;
 
@@ -955,20 +966,33 @@ export default function DashboardPage() {
      * Hanya kegagalan endpoint ini yang boleh menggagalkan halaman.
      */
     try {
-      const dashboardRes = await fetch(
-        `/api/dashboard?tanggal=${selectedDate}`,
-        {
+      async function requestDashboard() {
+        return fetch(`/api/dashboard?tanggal=${selectedDate}`, {
           cache: "no-store",
           credentials: "include",
-        },
-      );
+        });
+      }
+
+      let dashboardRes = await requestDashboard();
+
+      /*
+       * Saat hard reload, session cookie/token kadang belum selesai
+       * dibaca oleh route API. Beri satu kesempatan retry.
+       */
+      if ([401, 408, 429, 500, 502, 503, 504].includes(dashboardRes.status)) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 600);
+        });
+
+        dashboardRes = await requestDashboard();
+      }
 
       const dashboardData = await dashboardRes.json().catch(() => null);
 
       if (!dashboardRes.ok) {
         throw new Error(
           dashboardData?.error ??
-          `Gagal mengambil dashboard (${dashboardRes.status})`,
+            `Gagal mengambil dashboard (${dashboardRes.status})`,
         );
       }
 
@@ -1127,15 +1151,33 @@ export default function DashboardPage() {
   }, [isManagement, loading, data]);
 
   useEffect(() => {
-    if (sessionStatus === "authenticated") {
-      void fetchDashboard();
+    if (sessionStatus === "loading") {
+      return;
     }
 
     if (sessionStatus === "unauthenticated") {
+      setData(null);
       setLoading(false);
+      return;
     }
+
+    if (!sessionReady) {
+      setLoading(true);
+      return;
+    }
+
+    void fetchDashboard();
+
+    // sessionRolesKey dibutuhkan agar dashboard dimuat ulang
+    // ketika role tambahan selesai masuk ke session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStatus, selectedDate, session?.user?.id]);
+  }, [
+    sessionStatus,
+    sessionReady,
+    session?.user?.id,
+    sessionRolesKey,
+    selectedDate,
+  ]);
 
   if (loading) {
     return (
@@ -1202,7 +1244,19 @@ export default function DashboardPage() {
     absenBerangkat?.status ?? "",
   );
 
-  const userName = session?.user?.name ?? "Pengguna";
+  const sessionUser = session?.user as
+    | {
+        name?: string | null;
+        nama?: string | null;
+        nip?: string | null;
+      }
+    | undefined;
+
+  const userName =
+    sessionUser?.name?.trim() ||
+    sessionUser?.nama?.trim() ||
+    sessionUser?.nip?.trim() ||
+    "Pengguna";
 
   const totalPegawai =
     data.totalPegawaiUnik ?? (data.totalGuru ?? 0) + (data.totalStaff ?? 0);
@@ -1416,8 +1470,9 @@ export default function DashboardPage() {
             <StatCard
               label="Kehadiran Siswa"
               value={siswaTercatat}
-              sub={`${data.siswaHadir ?? 0} hadir · ${data.siswaTerlambat ?? 0
-                } terlambat`}
+              sub={`${data.siswaHadir ?? 0} hadir · ${
+                data.siswaTerlambat ?? 0
+              } terlambat`}
               icon={UserCheck}
               gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/25"
               accent="text-orange-100"
