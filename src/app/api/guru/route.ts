@@ -1,3 +1,4 @@
+import { SapaanGuru } from "@prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
@@ -8,6 +9,18 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const ROLE_PEMBACA_GURU = ["ADMIN", "PIMPINAN", "GURU", "STAFF"] as const;
+
+function parseSapaan(value: unknown): SapaanGuru | null {
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toUpperCase();
+
+  if (normalized === SapaanGuru.USTADZ || normalized === SapaanGuru.USTADZAH) {
+    return normalized as SapaanGuru;
+  }
+
+  return null;
+}
 
 // GET — ambil semua guru
 export async function GET() {
@@ -29,7 +42,7 @@ export async function GET() {
       );
     }
 
-    const guru = await prisma.user.findMany({
+    const users = await prisma.user.findMany({
       where: {
         role: "GURU",
         aktif: true,
@@ -40,11 +53,25 @@ export async function GET() {
         nip: true,
         noWa: true,
         aktif: true,
+        guru: {
+          select: {
+            sapaan: true,
+          },
+        },
       },
       orderBy: {
         nama: "asc",
       },
     });
+
+    const guru = users.map((user) => ({
+      id: user.id,
+      nama: user.nama,
+      nip: user.nip,
+      noWa: user.noWa,
+      aktif: user.aktif,
+      sapaan: user.guru?.sapaan ?? null,
+    }));
 
     return NextResponse.json(guru, {
       headers: {
@@ -72,9 +99,7 @@ export async function POST(req: Request) {
 
     if (session.user.role !== "ADMIN") {
       return NextResponse.json(
-        {
-          error: "Hanya admin yang dapat menambah guru",
-        },
+        { error: "Hanya admin yang dapat menambah guru" },
         { status: 403 },
       );
     }
@@ -82,7 +107,6 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const nama = typeof body.nama === "string" ? body.nama.trim() : "";
-
     const nip = typeof body.nip === "string" ? body.nip.trim() : "";
 
     const noWa =
@@ -91,6 +115,7 @@ export async function POST(req: Request) {
         : null;
 
     const password = typeof body.password === "string" ? body.password : "";
+    const sapaan = parseSapaan(body.sapaan);
 
     if (!nama) {
       return NextResponse.json(
@@ -103,22 +128,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "NIP wajib diisi" }, { status: 400 });
     }
 
+    if (!sapaan) {
+      return NextResponse.json(
+        { error: "Sapaan wajib dipilih: Ustadz atau Ustadzah" },
+        { status: 400 },
+      );
+    }
+
     if (password.length < 6) {
       return NextResponse.json(
-        {
-          error: "Password minimal 6 karakter",
-        },
+        { error: "Password minimal 6 karakter" },
         { status: 400 },
       );
     }
 
     const existing = await prisma.user.findUnique({
-      where: {
-        nip,
-      },
-      select: {
-        id: true,
-      },
+      where: { nip },
+      select: { id: true },
     });
 
     if (existing) {
@@ -139,7 +165,9 @@ export async function POST(req: Request) {
         role: "GURU",
         aktif: true,
         guru: {
-          create: {},
+          create: {
+            sapaan,
+          },
         },
       },
       select: {
@@ -148,12 +176,25 @@ export async function POST(req: Request) {
         nip: true,
         noWa: true,
         aktif: true,
+        guru: {
+          select: {
+            sapaan: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json(user, {
-      status: 201,
-    });
+    return NextResponse.json(
+      {
+        id: user.id,
+        nama: user.nama,
+        nip: user.nip,
+        noWa: user.noWa,
+        aktif: user.aktif,
+        sapaan: user.guru?.sapaan ?? null,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("POST_GURU_ERROR:", error);
 

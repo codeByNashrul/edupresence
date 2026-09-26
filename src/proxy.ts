@@ -20,6 +20,8 @@ const PUBLIC_PREFIXES = [
   "/~offline",
 ];
 
+const PUBLIC_EXACT_PATHS = new Set(["/api/cron/monitoring-kbm"]);
+
 const DIRECTORY_ROUTES = ["/guru", "/staff", "/siswa"];
 
 const DIRECTORY_ROLES = ["ADMIN", "PIMPINAN", "GURU", "STAFF"];
@@ -41,6 +43,7 @@ export default auth((req) => {
 
   const isPublicPath =
     PUBLIC_FILES.has(pathname) ||
+    PUBLIC_EXACT_PATHS.has(pathname) ||
     PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
   if (isPublicPath) {

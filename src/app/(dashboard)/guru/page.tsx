@@ -23,6 +23,7 @@ interface Guru {
   nama: string;
   nip: string;
   noWa: string | null;
+  sapaan: "USTADZ" | "USTADZAH" | null;
   aktif: boolean;
 }
 
@@ -144,10 +145,11 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition ${danger
-              ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-md shadow-red-500/20"
-              : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-500/20"
-              }`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition ${
+              danger
+                ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-md shadow-red-500/20"
+                : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-500/20"
+            }`}
           >
             {confirmLabel}
           </button>
@@ -206,10 +208,17 @@ export default function GuruPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<Guru | null>(null);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    nama: string;
+    nip: string;
+    noWa: string;
+    sapaan: "USTADZ" | "USTADZAH";
+    password: string;
+  }>({
     nama: "",
     nip: "",
     noWa: "",
+    sapaan: "USTADZ",
     password: "",
   });
   const [formError, setFormError] = useState("");
@@ -223,7 +232,7 @@ export default function GuruPage() {
     confirmLabel?: string;
     danger?: boolean;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", onConfirm: () => { } });
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
 
   const { toasts, show: showToast, remove: removeToast } = useToast();
 
@@ -256,15 +265,22 @@ export default function GuruPage() {
 
   useEffect(() => {
     if (sessionStatus === "authenticated" && canViewGuru) {
-      void fetchGuru();
-      return;
+      const timer = window.setTimeout(() => {
+        void fetchGuru();
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     if (
       sessionStatus === "unauthenticated" ||
       (sessionStatus === "authenticated" && !canViewGuru)
     ) {
-      setLoading(false);
+      const timer = window.setTimeout(() => {
+        setLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
   }, [sessionStatus, canViewGuru, fetchGuru]);
 
@@ -280,7 +296,13 @@ export default function GuruPage() {
     if (!canManageGuru) return;
 
     setEditData(null);
-    setForm({ nama: "", nip: "", noWa: "", password: "" });
+    setForm({
+      nama: "",
+      nip: "",
+      noWa: "",
+      sapaan: "USTADZ",
+      password: "",
+    });
     setFormError("");
     setShowForm(true);
   }
@@ -289,7 +311,13 @@ export default function GuruPage() {
     if (!canManageGuru) return;
 
     setEditData(g);
-    setForm({ nama: g.nama, nip: g.nip, noWa: g.noWa ?? "", password: "" });
+    setForm({
+      nama: g.nama,
+      nip: g.nip,
+      noWa: g.noWa ?? "",
+      sapaan: g.sapaan ?? "USTADZ",
+      password: "",
+    });
     setFormError("");
     setShowForm(true);
   }
@@ -455,7 +483,7 @@ export default function GuruPage() {
         .split(";")
         .map((header) => header.trim().toLowerCase());
 
-      const requiredCols = ["nama", "nip", "password"];
+      const requiredCols = ["nama", "nip", "sapaan", "password"];
 
       const missingCols = requiredCols.filter(
         (column) => !headers.includes(column),
@@ -482,7 +510,7 @@ export default function GuruPage() {
 
           return row;
         })
-        .filter((row) => row.nama && row.nip && row.password);
+        .filter((row) => row.nama && row.nip && row.sapaan && row.password);
 
       if (rows.length === 0) {
         showToast("Tidak ada data valid di CSV", "error");
@@ -534,11 +562,18 @@ export default function GuruPage() {
       return text;
     };
 
-    const headers = ["Nama", "NIP", "No. WhatsApp"];
+    const headers = ["Nama", "NIP", "Sapaan", "No. WhatsApp"];
 
     const rows = guru.map((item) => [
       escapeCsv(item.nama),
       escapeCsv(item.nip),
+      escapeCsv(
+        item.sapaan === "USTADZAH"
+          ? "Ustadzah"
+          : item.sapaan === "USTADZ"
+            ? "Ustadz"
+            : "",
+      ),
       escapeCsv(item.noWa),
     ]);
 
@@ -619,9 +654,7 @@ export default function GuruPage() {
               </span>
 
               <h1 className="text-2xl font-bold tracking-tight text-white">
-                {canManageGuru
-                  ? "Manajemen Guru"
-                  : "Data Guru"}
+                {canManageGuru ? "Manajemen Guru" : "Data Guru"}
               </h1>
 
               <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-indigo-100">
@@ -647,7 +680,6 @@ export default function GuruPage() {
                 <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20">
                   <Upload size={16} />
                   Import CSV
-
                   <input
                     type="file"
                     accept=".csv"
@@ -681,19 +713,14 @@ export default function GuruPage() {
           {/* Mode lihat saja */}
           {!canManageGuru && (
             <div className="mt-5 flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white backdrop-blur-sm">
-              <Info
-                size={18}
-                className="mt-0.5 shrink-0 text-indigo-100"
-              />
+              <Info size={18} className="mt-0.5 shrink-0 text-indigo-100" />
 
               <div>
-                <p className="font-semibold">
-                  Mode lihat saja
-                </p>
+                <p className="font-semibold">Mode lihat saja</p>
 
                 <p className="mt-0.5 text-xs leading-relaxed text-indigo-100">
-                  Data guru hanya dapat ditambah, diubah,
-                  atau dinonaktifkan oleh admin.
+                  Data guru hanya dapat ditambah, diubah, atau dinonaktifkan
+                  oleh admin.
                 </p>
               </div>
             </div>
@@ -707,13 +734,17 @@ export default function GuruPage() {
         <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-4 text-sm text-indigo-700 dark:text-indigo-300">
           <strong>Format CSV Import:</strong> kolom dipisah titik koma (;) —{" "}
           <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
-            nama;nip;noWa;password
+            nama;nip;sapaan;noWa;password
           </code>{" "}
           — kolom{" "}
           <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
             noWa
           </code>{" "}
-          opsional.
+          opsional. Kolom{" "}
+          <code className="mx-1 bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded text-xs">
+            sapaan
+          </code>{" "}
+          wajib berisi <strong>USTADZ</strong> atau <strong>USTADZAH</strong>.
         </div>
       )}
 
@@ -771,6 +802,9 @@ export default function GuruPage() {
                     NIP
                   </th>
                   <th className="text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
+                    Sapaan
+                  </th>
+                  <th className="text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
                     No. WhatsApp
                   </th>
                   {canManageGuru && (
@@ -825,6 +859,9 @@ export default function GuruPage() {
                     NIP
                   </th>
                   <th className="text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
+                    Sapaan
+                  </th>
+                  <th className="text-left px-5 py-3.5 font-semibold text-gray-600 dark:text-gray-400 text-xs uppercase tracking-wider">
                     No. WhatsApp
                   </th>
                   {canManageGuru && (
@@ -856,6 +893,15 @@ export default function GuruPage() {
                     <td className="px-5 py-4">
                       <span className="font-mono text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2.5 py-1 rounded-lg">
                         {g.nip}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="inline-flex rounded-lg bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                        {g.sapaan === "USTADZAH"
+                          ? "Ustadzah"
+                          : g.sapaan === "USTADZ"
+                            ? "Ustadz"
+                            : "Belum diisi"}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-gray-600 dark:text-gray-400">
@@ -973,6 +1019,26 @@ export default function GuruPage() {
                   />
                 </div>
               ))}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Sapaan
+                </label>
+                <select
+                  value={form.sapaan}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      sapaan: e.target.value as "USTADZ" | "USTADZAH",
+                    })
+                  }
+                  required
+                  className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="USTADZ">Ustadz</option>
+                  <option value="USTADZAH">Ustadzah</option>
+                </select>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">

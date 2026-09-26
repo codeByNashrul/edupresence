@@ -49,11 +49,12 @@ model UserOrtu {
 }
 
 model Guru {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String      @id @default(cuid())
+  userId    String      @unique
+  sapaan    SapaanGuru?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   jadwal    Jadwal[]
 
   @@map("guru")
@@ -185,6 +186,33 @@ model Absensi {
   @@index([dicatatOlehId, tanggal])
   @@index([izinId])
   @@map("absensi")
+}
+
+model MonitoringKbmDispatch {
+  id         String     @id @default(cuid())
+  tanggal    DateTime
+  hari       HariMinggu
+  label      String
+  jamMulai   String
+  jamSelesai String
+  midpoint   String
+
+  status MonitoringKbmDispatchStatus @default(READY)
+
+  pesan   String
+  payload Json
+
+  attempts          Int       @default(0)
+  sentAt            DateTime?
+  providerMessageId String?
+  error             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tanggal, jamMulai, jamSelesai])
+  @@index([tanggal, status])
+  @@map("monitoring_kbm_dispatch")
 }
 
 model Pengaturan {
@@ -385,6 +413,18 @@ model KalenderAkademik {
   tanggalSelesai DateTime
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+enum MonitoringKbmDispatchStatus {
+  READY
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum SapaanGuru {
+  USTADZ
+  USTADZAH
 }
 
 enum Role {

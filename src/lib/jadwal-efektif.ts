@@ -1,6 +1,7 @@
 import {
   HariMinggu,
   Prisma,
+  SapaanGuru,
   SemesterAkademik,
   StatusTukarJadwal,
 } from "@prisma/client";
@@ -26,6 +27,7 @@ const JADWAL_SELECT = {
     select: {
       id: true,
       userId: true,
+      sapaan: true,
 
       user: {
         select: {
@@ -86,6 +88,7 @@ export interface JadwalEfektifItem {
     id: string;
     userId: string;
     nama: string;
+    sapaan: SapaanGuru | null;
     noWa: string | null;
   };
 
@@ -223,6 +226,7 @@ function buatJadwalInduk(
       id: jadwal.guru.id,
       userId: jadwal.guru.userId,
       nama: jadwal.guru.user.nama,
+      sapaan: jadwal.guru.sapaan,
       noWa: jadwal.guru.user.noWa,
     },
 
@@ -293,6 +297,7 @@ function buatJadwalTukar({
       id: jadwalYangDipindah.guru.id,
       userId: jadwalYangDipindah.guru.userId,
       nama: jadwalYangDipindah.guru.user.nama,
+      sapaan: jadwalYangDipindah.guru.sapaan,
       noWa: jadwalYangDipindah.guru.user.noWa,
     },
 
@@ -358,59 +363,57 @@ export async function getJadwalEfektif({
 
   const periode = getPeriodeAkademik(tanggal);
 
-  const [jadwalInduk, pertukaran] = await Promise.all([
-    prisma.jadwal.findMany({
-      where: {
-        aktif: true,
-        hari,
-        tahunAjaran: periode.tahunAjaran,
-        semester: periode.semester,
+  const jadwalInduk = await prisma.jadwal.findMany({
+    where: {
+      aktif: true,
+      hari,
+      tahunAjaran: periode.tahunAjaran,
+      semester: periode.semester,
+    },
+
+    select: JADWAL_SELECT,
+
+    orderBy: [
+      {
+        jamMulai: "asc",
       },
+      {
+        kelas: {
+          nama: "asc",
+        },
+      },
+    ],
+  });
 
-      select: JADWAL_SELECT,
+  const pertukaran = await prisma.tukarJadwal.findMany({
+    where: {
+      status: StatusTukarJadwal.DISETUJUI,
 
-      orderBy: [
+      OR: [
         {
-          jamMulai: "asc",
+          tanggalJadwalPengaju: tanggal,
         },
         {
-          kelas: {
-            nama: "asc",
-          },
+          tanggalJadwalPenerima: tanggal,
         },
       ],
-    }),
+    },
 
-    prisma.tukarJadwal.findMany({
-      where: {
-        status: StatusTukarJadwal.DISETUJUI,
+    select: {
+      id: true,
 
-        OR: [
-          {
-            tanggalJadwalPengaju: tanggal,
-          },
-          {
-            tanggalJadwalPenerima: tanggal,
-          },
-        ],
+      tanggalJadwalPengaju: true,
+      tanggalJadwalPenerima: true,
+
+      jadwalPengaju: {
+        select: JADWAL_SELECT,
       },
 
-      select: {
-        id: true,
-
-        tanggalJadwalPengaju: true,
-        tanggalJadwalPenerima: true,
-
-        jadwalPengaju: {
-          select: JADWAL_SELECT,
-        },
-
-        jadwalPenerima: {
-          select: JADWAL_SELECT,
-        },
+      jadwalPenerima: {
+        select: JADWAL_SELECT,
       },
-    }),
-  ]);
+    },
+  });
 
   /**
    * Jadwal induk yang dipindahkan keluar dari tanggal ini
