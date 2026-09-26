@@ -7,6 +7,7 @@ import {
   getMonitoringKbm,
   parseTanggalMonitoring,
 } from "@/lib/monitoring-kbm";
+import { processMonitoringKbmDispatch } from "@/lib/monitoring-kbm-dispatch";
 import { prisma } from "@/lib/prisma";
 import { timeJakarta, todayJakarta } from "@/lib/time";
 
@@ -62,8 +63,8 @@ export async function GET(req: Request) {
       Boolean(cronSecret) && authorization === `Bearer ${cronSecret}`;
 
     /*
-     * Selain request resmi dari cron, endpoint hanya boleh
-     * dipakai ADMIN untuk pengujian manual.
+     * Request biasa hanya boleh digunakan ADMIN.
+     * Request cron production menggunakan CRON_SECRET.
      */
     if (!isCronRequest) {
       const session = await auth();
@@ -90,8 +91,8 @@ export async function GET(req: Request) {
     const waktuParam = searchParams.get("waktu");
 
     /*
-     * Request cron resmi tidak boleh memalsukan tanggal/waktu.
-     * Override hanya untuk pengujian manual oleh ADMIN.
+     * Cron production tidak boleh mengubah waktu/tanggal.
+     * Override hanya tersedia untuk test manual ADMIN.
      */
     if (isCronRequest && (tanggalParam !== null || waktuParam !== null)) {
       return NextResponse.json(
@@ -128,13 +129,9 @@ export async function GET(req: Request) {
 
     const blocks = getBlokMonitoring(tanggal);
 
-    /*
-     * Minggu dan Sabtu saat ini tidak mempunyai scheduler KBM.
-     */
     if (blocks.length === 0) {
       return NextResponse.json({
         ok: true,
-        dryRun: true,
         action: "NO_SCHEDULE",
         tanggal: formatTanggal(tanggal),
         waktu,
@@ -147,7 +144,6 @@ export async function GET(req: Request) {
     if (!block) {
       return NextResponse.json({
         ok: true,
-        dryRun: true,
         action: "NO_MATCH",
         tanggal: formatTanggal(tanggal),
         waktu,
@@ -159,8 +155,40 @@ export async function GET(req: Request) {
     }
 
     /*
-     * Generate snapshot tepat untuk tanggal tersebut.
-     * Belum ada pengiriman WhatsApp.
+     * Cek ledger terlebih dahulu.
+     *
+     * Jika dispatch sudah ada, jangan generate snapshot baru.
+     * Snapshot pertama tetap authoritative.
+     */
+    const existing = await prisma.monitoringKbmDispatch.findUnique({
+      where: {
+        tanggal_jamMulai_jamSelesai: {
+          tanggal,
+          jamMulai: block.jamMulai,
+          jamSelesai: block.jamSelesai,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        attempts: true,
+      },
+    });
+
+    if (existing) {
+      const processing = await processMonitoringKbmDispatch(existing.id);
+
+      return NextResponse.json({
+        ok: true,
+        action: processing.action,
+        existingDispatch: true,
+        dispatch: processing,
+      });
+    }
+
+    /*
+     * Belum ada dispatch:
+     * buat snapshot monitoring dulu.
      */
     const monitoring = await getMonitoringKbm(tanggal);
 
@@ -181,8 +209,7 @@ export async function GET(req: Request) {
 
     /*
      * Fail closed:
-     * jangan membuat dispatch bila struktur monitoring
-     * belum sempurna.
+     * jangan kirim kalau struktur kelas bermasalah.
      */
     if (result.totalKelas !== 10 || result.anomali.length > 0) {
       return NextResponse.json(
@@ -194,6 +221,8 @@ export async function GET(req: Request) {
         { status: 409 },
       );
     }
+
+    let dispatchId: string;
 
     try {
       const dispatch = await prisma.monitoringKbmDispatch.create({
@@ -214,41 +243,21 @@ export async function GET(req: Request) {
         },
         select: {
           id: true,
-          tanggal: true,
-          hari: true,
-          label: true,
-          jamMulai: true,
-          jamSelesai: true,
-          midpoint: true,
-          status: true,
-          attempts: true,
-          createdAt: true,
         },
       });
 
-      return NextResponse.json(
-        {
-          ok: true,
-          dryRun: true,
-          action: "CREATED",
-          message:
-            "Dispatch monitoring dibuat. Belum ada WhatsApp yang dikirim.",
-          dispatch,
-          previewPesan: result.pesan,
-        },
-        { status: 201 },
-      );
+      dispatchId = dispatch.id;
     } catch (error) {
       /*
-       * Unique constraint adalah pagar idempotency.
-       * Kalau scheduler dipanggil lagi untuk blok yang sama,
-       * jangan membuat dispatch kedua.
+       * Race condition:
+       * request lain mungkin membuat row setelah
+       * pengecekan existing di atas.
        */
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
-        const existing = await prisma.monitoringKbmDispatch.findUnique({
+        const raced = await prisma.monitoringKbmDispatch.findUnique({
           where: {
             tanggal_jamMulai_jamSelesai: {
               tanggal,
@@ -258,36 +267,42 @@ export async function GET(req: Request) {
           },
           select: {
             id: true,
-            tanggal: true,
-            hari: true,
-            label: true,
-            jamMulai: true,
-            jamSelesai: true,
-            midpoint: true,
-            status: true,
-            attempts: true,
-            createdAt: true,
-            sentAt: true,
           },
         });
 
-        return NextResponse.json({
-          ok: true,
-          dryRun: true,
-          action: "SKIPPED_ALREADY_EXISTS",
-          message: "Dispatch blok ini sudah pernah dibuat.",
-          dispatch: existing,
-        });
-      }
+        if (!raced) {
+          throw error;
+        }
 
-      throw error;
+        dispatchId = raced.id;
+      } else {
+        throw error;
+      }
     }
+
+    const processing = await processMonitoringKbmDispatch(dispatchId);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        action: processing.action,
+        existingDispatch: false,
+        dispatch: processing,
+        previewPesan: result.pesan,
+      },
+      {
+        status: processing.action === "QUEUED" ? 202 : 200,
+      },
+    );
   } catch (error) {
     console.error("CRON_MONITORING_KBM_ERROR:", error);
 
     return NextResponse.json(
       {
-        error: "Gagal menjalankan scheduler monitoring KBM",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Gagal menjalankan scheduler monitoring KBM",
       },
       { status: 500 },
     );

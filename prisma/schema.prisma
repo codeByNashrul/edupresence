@@ -204,6 +204,7 @@ model MonitoringKbmDispatch {
 
   attempts          Int       @default(0)
   sentAt            DateTime?
+  kirimyoMessageId  String?
   providerMessageId String?
   error             String?
 
@@ -418,6 +419,7 @@ model KalenderAkademik {
 enum MonitoringKbmDispatchStatus {
   READY
   PROCESSING
+  QUEUED
   SENT
   FAILED
 }

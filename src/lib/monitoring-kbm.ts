@@ -222,54 +222,90 @@ function classOrder(nama: string) {
   return tingkat * 1000 + rombel;
 }
 
-function statusLabel(status: StatusMonitoringKbm) {
-  switch (status) {
+function formatHariIndonesia(hari: HariMinggu) {
+  const labels: Record<HariMinggu, string> = {
+    SENIN: "Senin",
+    SELASA: "Selasa",
+    RABU: "Rabu",
+    KAMIS: "Kamis",
+    JUMAT: "Jumat",
+    SABTU: "Sabtu",
+  };
+
+  return labels[hari];
+}
+
+function formatTanggalIndonesia(tanggal: string) {
+  const [tahun, bulan, hari] = tanggal.split("-").map(Number);
+
+  const bulanIndonesia = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+
+  return `${hari} ${bulanIndonesia[bulan - 1]} ${tahun}`;
+}
+
+function formatBarisMonitoring(item: MonitoringKbmResult["data"][number]) {
+  if (!item.guru) {
+    return `⚪ ${item.kelas} — *TIDAK ADA JADWAL*`;
+  }
+
+  const guru = `${item.kelas} — ${item.guru.namaLengkap}`;
+
+  switch (item.status) {
     case StatusAbsensi.HADIR:
-      return "HADIR";
     case StatusAbsensi.TERLAMBAT:
-      return "TERLAMBAT";
+      return `✅ ${guru}`;
+
     case StatusAbsensi.IZIN:
-      return "IZIN";
+      return `🟡 ${guru} — *IZIN*`;
+
     case StatusAbsensi.SAKIT:
-      return "SAKIT";
+      return `🟣 ${guru} — *SAKIT*`;
+
     case StatusAbsensi.ALPHA:
-      return "ALPHA";
+      return `🔴 ${guru} — *ALPHA*`;
+
     case "BELUM_MASUK":
-      return "BELUM MASUK";
+      return `🔴 ${guru} — *BELUM MASUK*`;
+
     case "TIDAK_ADA_JADWAL":
-      return "TIDAK ADA JADWAL";
+      return `⚪ ${item.kelas} — *TIDAK ADA JADWAL*`;
   }
 }
 
 function buatPesan(result: Omit<MonitoringKbmResult, "pesan">) {
+  const jamMulai = result.blok.jamMulai.replace(":", ".");
+  const jamSelesai = result.blok.jamSelesai.replace(":", ".");
+
   const lines = [
-    `📚 Monitoring KBM ${result.blok.label}`,
-    `${result.blok.jamMulai.replace(":", ".")}–${result.blok.jamSelesai.replace(":", ".")}`,
+    `📚 *MONITORING KBM — ${result.blok.label}*`,
+    `🕗 ${jamMulai}–${jamSelesai} | ${formatHariIndonesia(result.hari)}, ${formatTanggalIndonesia(result.tanggal)}`,
     "",
+    "*Kehadiran per Kelas*",
   ];
 
   for (const item of result.data) {
-    if (!item.guru) {
-      lines.push(`${item.kelas} — TIDAK ADA JADWAL`);
-
-      continue;
-    }
-
-    lines.push(
-      `${item.kelas} — ${item.guru.namaLengkap} — ${statusLabel(item.status)}`,
-    );
+    lines.push(formatBarisMonitoring(item));
   }
 
   lines.push("");
   lines.push(
-    [
-      `Hadir: ${result.ringkasan.hadir}`,
-      `Terlambat: ${result.ringkasan.terlambat}`,
-      `Izin/Sakit: ${result.ringkasan.izin + result.ringkasan.sakit}`,
-      `Alpha: ${result.ringkasan.alpha}`,
-      `Belum: ${result.ringkasan.belumMasuk}`,
-    ].join(" | "),
+    "_Tetap semangat dalam mendampingi proses belajar para santri 🫡_",
   );
+  lines.push("");
+  lines.push("_EduPresence • Monitoring KBM Otomatis_");
 
   return lines.join("\n");
 }
