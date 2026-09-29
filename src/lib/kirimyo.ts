@@ -86,3 +86,79 @@ export async function sendKirimYoText(params: {
     jobId: body?.data?.jobId ?? null,
   };
 }
+
+type KirimYoAutomationWebhookResponse = {
+  success?: boolean;
+  message?: string;
+  duplicate?: boolean;
+  queued?: boolean;
+  data?: {
+    runId?: string;
+    status?: string;
+  };
+};
+
+export async function sendKirimYoAutomationWebhook(params: {
+  eventId: string;
+  date: string;
+  block: string;
+  message: string;
+}) {
+  const webhookUrl = requiredEnv("KIRIMYO_AUTOMATION_WEBHOOK_URL");
+  const webhookSecret = requiredEnv("KIRIMYO_AUTOMATION_WEBHOOK_SECRET");
+
+  if (!params.eventId.trim()) {
+    throw new Error("Event ID Monitoring KBM tidak boleh kosong");
+  }
+
+  if (!params.message.trim()) {
+    throw new Error("Pesan Monitoring KBM tidak boleh kosong");
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-KirimYo-Webhook-Secret": webhookSecret,
+      "Idempotency-Key": params.eventId,
+    },
+    body: JSON.stringify({
+      eventId: params.eventId,
+      type: "monitoring_kbm",
+      date: params.date,
+      block: params.block,
+      message: params.message,
+    }),
+    cache: "no-store",
+  });
+
+  let body: KirimYoAutomationWebhookResponse | null = null;
+
+  try {
+    body = (await response.json()) as KirimYoAutomationWebhookResponse;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok || body?.success !== true) {
+    throw new Error(
+      body?.message ||
+        `KirimYo Automation gagal menerima event (${response.status})`,
+    );
+  }
+
+  const runId = body.data?.runId;
+
+  if (!runId) {
+    throw new Error(
+      "KirimYo Automation menerima event tetapi tidak mengembalikan run ID",
+    );
+  }
+
+  return {
+    runId,
+    status: body.data?.status ?? null,
+    duplicate: body.duplicate === true,
+    queued: body.queued === true,
+  };
+}

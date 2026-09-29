@@ -1,13 +1,13 @@
 import { MonitoringKbmDispatchStatus } from "@prisma/client";
 
-import { sendKirimYoText } from "@/lib/kirimyo";
+import { sendKirimYoAutomationWebhook } from "@/lib/kirimyo";
 import { prisma } from "@/lib/prisma";
 
 export type ProcessMonitoringDispatchResult =
   | {
       action: "QUEUED";
       dispatchId: string;
-      kirimyoMessageId: string;
+      kirimyoRunId: string;
       duplicate: boolean;
       attempts: number;
     }
@@ -109,6 +109,8 @@ export async function processMonitoringKbmDispatch(
     },
     select: {
       id: true,
+      tanggal: true,
+      label: true,
       pesan: true,
       attempts: true,
     },
@@ -118,19 +120,35 @@ export async function processMonitoringKbmDispatch(
     throw new Error("Dispatch monitoring hilang setelah claim");
   }
 
+  const tanggal = dispatch.tanggal.toISOString().slice(0, 10);
+
+  const blockKey = dispatch.label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!blockKey) {
+    throw new Error("Label blok Monitoring KBM tidak valid");
+  }
+
   /*
-   * Key ini STABIL untuk satu dispatch.
+   * Event identity bersifat deterministic untuk satu kejadian KBM.
    *
-   * Kalau EduPresence timeout setelah KirimYo sebenarnya menerima
-   * pesan, retry berikutnya memakai key yang sama dan KirimYo akan
-   * mengembalikan message lama sebagai duplicate.
+   * Contoh:
+   * kbm:2026-09-29:jam-1-2
+   *
+   * Retry EduPresence memakai eventId / Idempotency-Key yang sama,
+   * sehingga KirimYo mengembalikan AutomationRun yang sama.
    */
-  const idempotencyKey = `edupresence-kbm-${dispatch.id}`;
+  const eventId = `kbm:${tanggal}:${blockKey}`;
 
   try {
-    const kirimyo = await sendKirimYoText({
+    const kirimyo = await sendKirimYoAutomationWebhook({
+      eventId,
+      date: tanggal,
+      block: dispatch.label,
       message: dispatch.pesan,
-      idempotencyKey,
     });
 
     await prisma.monitoringKbmDispatch.update({
@@ -138,8 +156,13 @@ export async function processMonitoringKbmDispatch(
         id: dispatch.id,
       },
       data: {
+        /*
+         * QUEUED di ledger EduPresence berarti event sudah diterima
+         * secara durable oleh KirimYo. Delivery WhatsApp tetap menjadi
+         * concern pipeline KirimYo.
+         */
         status: MonitoringKbmDispatchStatus.QUEUED,
-        kirimyoMessageId: kirimyo.messageId,
+        kirimyoAutomationRunId: kirimyo.runId,
         error: null,
       },
     });
@@ -147,7 +170,7 @@ export async function processMonitoringKbmDispatch(
     return {
       action: "QUEUED",
       dispatchId: dispatch.id,
-      kirimyoMessageId: kirimyo.messageId,
+      kirimyoRunId: kirimyo.runId,
       duplicate: kirimyo.duplicate,
       attempts: dispatch.attempts,
     };

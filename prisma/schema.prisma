@@ -202,11 +202,12 @@ model MonitoringKbmDispatch {
   pesan   String
   payload Json
 
-  attempts          Int       @default(0)
-  sentAt            DateTime?
-  kirimyoMessageId  String?
-  providerMessageId String?
-  error             String?
+  attempts               Int       @default(0)
+  sentAt                 DateTime?
+  kirimyoMessageId       String?
+  kirimyoAutomationRunId String?
+  providerMessageId      String?
+  error                  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
