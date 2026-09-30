@@ -3,11 +3,7 @@
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
-import { Menu, LogOut, CalendarDays, Clock } from "lucide-react";
-
-interface Props {
-  onMenuClick: () => void;
-}
+import { LogOut, CalendarDays, Clock, School } from "lucide-react";
 
 function formatHeaderDate(date: Date) {
   return date.toLocaleDateString("id-ID", {
@@ -27,7 +23,7 @@ function formatHeaderTime(date: Date) {
   });
 }
 
-export default function Header({ onMenuClick }: Props) {
+export default function Header() {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -50,16 +46,14 @@ export default function Header({ onMenuClick }: Props) {
         <div className="absolute left-0 top-0 bottom-0 w-px bg-white/10 hidden lg:block" />
 
         <div className="relative px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
-          {/* Hamburger mobile */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onMenuClick}
-              className="p-2.5 rounded-xl text-white bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-sm transition lg:hidden"
-              aria-label="Buka menu"
-            >
-              <Menu size={20} />
-            </button>
+          {/* Identitas aplikasi mobile (navigasi utama ada di bawah). */}
+          <div className="flex min-w-0 items-center gap-2 lg:hidden">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-white">
+              <School size={19} aria-hidden="true" />
+            </div>
+            <span className="truncate text-sm font-bold tracking-tight text-white">
+              EduPresence
+            </span>
           </div>
 
           {/* Tanggal & jam — desktop tengah */}

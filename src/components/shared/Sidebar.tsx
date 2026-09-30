@@ -105,7 +105,7 @@ const menuOrtu = [
   { label: "Ganti Password", href: "/ortu/ganti-password" },
 ];
 
-const menuMap: Record<string, typeof menuAdmin> = {
+export const menuMap: Record<string, typeof menuAdmin> = {
   ADMIN: menuAdmin,
   PIMPINAN: menuPimpinan,
   GURU: menuGuru,
@@ -114,7 +114,7 @@ const menuMap: Record<string, typeof menuAdmin> = {
   ORTU: menuOrtu,
 };
 
-const iconMap: Record<string, React.ElementType> = {
+export const iconMap: Record<string, React.ElementType> = {
   "/dashboard": LayoutDashboard,
   "/guru": Users,
   "/staff": UserCheck,
@@ -148,7 +148,7 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 // Role yang punya halaman /profil
-const ROLES_WITH_PROFIL = ["ADMIN", "PIMPINAN", "GURU", "STAFF"];
+export const ROLES_WITH_PROFIL = ["ADMIN", "PIMPINAN", "GURU", "STAFF"];
 
 interface SidebarProps {
   role: string;
@@ -180,13 +180,11 @@ export default function Sidebar({
     return Array.from(
       new Set(
         [role, ...rolesFromSession].filter(
-          (item): item is string =>
-            typeof item === "string" &&
-            item.length > 0,
+          (item): item is string => typeof item === "string" && item.length > 0,
         ),
       ),
     );
-  }, [role, session?.user?.roles]);
+  }, [role, session]);
 
   /*
    * Gabungkan menu dari semua role dan hapus duplikat
@@ -198,17 +196,11 @@ export default function Sidebar({
     );
 
     return Array.from(
-      new Map(
-        combinedMenu.map(
-          (item) => [item.href, item] as const,
-        ),
-      ).values(),
+      new Map(combinedMenu.map((item) => [item.href, item] as const)).values(),
     );
   }, [userRoles]);
 
-  const hasScan = menu.some(
-    (item) => item.href === "/scan",
-  );
+  const hasScan = menu.some((item) => item.href === "/scan");
 
   const showLabels = isExpanded;
   const collapsed = !showLabels;
@@ -217,13 +209,9 @@ export default function Sidebar({
     ROLES_WITH_PROFIL.includes(userRole),
   );
 
-  const isOrtuOnly =
-    userRoles.length === 1 &&
-    userRoles.includes("ORTU");
+  const isOrtuOnly = userRoles.length === 1 && userRoles.includes("ORTU");
 
-  const isPiketOnly =
-    userRoles.length === 1 &&
-    userRoles.includes("PIKET");
+  const isPiketOnly = userRoles.length === 1 && userRoles.includes("PIKET");
 
   const homeHref = isOrtuOnly
     ? "/ortu/dashboard"
@@ -245,16 +233,19 @@ export default function Sidebar({
   }, [pathname]);
 
   const desktopNavClass = (active: boolean) =>
-    `group flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 ${collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
-    } ${active
-      ? "bg-white/20 text-white shadow-md ring-1 ring-white/25"
-      : "text-indigo-100/85 hover:bg-white/10 hover:text-white"
+    `group flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+      collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
+    } ${
+      active
+        ? "bg-white/20 text-white shadow-md ring-1 ring-white/25"
+        : "text-indigo-100/85 hover:bg-white/10 hover:text-white"
     }`;
 
   const mobileNavClass = (active: boolean) =>
-    `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${active
-      ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
-      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/80 hover:text-indigo-600"
+    `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+      active
+        ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
+        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/80 hover:text-indigo-600"
     }`;
 
   const navItems = menu.filter((item) => item.href !== "/scan");
@@ -275,7 +266,7 @@ export default function Sidebar({
         onMouseEnter={() => onHoverChange(true)}
         onMouseLeave={() => onHoverChange(false)}
         className={`
-          fixed top-0 left-0 h-full z-50 flex flex-col overflow-hidden
+          fixed top-0 left-0 h-full z-50 hidden flex-col overflow-hidden lg:flex
           transition-all duration-300
           bg-white dark:bg-gray-950
           lg:bg-gradient-to-b lg:from-indigo-600 lg:via-indigo-700 lg:to-violet-800
@@ -289,8 +280,9 @@ export default function Sidebar({
       >
         {/* Brand */}
         <div
-          className={`flex items-center gap-3 p-4 min-h-[4.5rem] border-b border-gray-100 dark:border-gray-800 lg:border-white/10 shrink-0 ${showLabels ? "justify-between" : "justify-center lg:px-2"
-            }`}
+          className={`flex items-center gap-3 p-4 min-h-[4.5rem] border-b border-gray-100 dark:border-gray-800 lg:border-white/10 shrink-0 ${
+            showLabels ? "justify-between" : "justify-center lg:px-2"
+          }`}
         >
           <Link
             href={homeHref}
@@ -409,13 +401,15 @@ export default function Sidebar({
               <Link
                 href="/scan"
                 title={collapsed ? "Scan Absensi" : undefined}
-                className={`hidden lg:flex items-center justify-center gap-2 font-semibold text-sm text-white transition-all ${collapsed
-                  ? "w-10 h-10 rounded-xl"
-                  : "w-full px-3 py-2.5 rounded-xl"
-                  } ${pathname === "/scan"
+                className={`hidden lg:flex items-center justify-center gap-2 font-semibold text-sm text-white transition-all ${
+                  collapsed
+                    ? "w-10 h-10 rounded-xl"
+                    : "w-full px-3 py-2.5 rounded-xl"
+                } ${
+                  pathname === "/scan"
                     ? "bg-white/25 ring-2 ring-white/40"
                     : "bg-white/15 hover:bg-white/25"
-                  }`}
+                }`}
               >
                 <ScanLine size={18} />
                 {showLabels && <span>Scan Absensi</span>}
@@ -424,13 +418,15 @@ export default function Sidebar({
               <Link
                 href="/scan-kegiatan-siswa"
                 title={collapsed ? "Scan Siswa" : undefined}
-                className={`hidden lg:flex items-center justify-center gap-2 font-semibold text-sm text-white transition-all ${collapsed
-                  ? "w-10 h-10 rounded-xl"
-                  : "w-full px-3 py-2.5 rounded-xl"
-                  } ${pathname === "/scan-kegiatan-siswa"
+                className={`hidden lg:flex items-center justify-center gap-2 font-semibold text-sm text-white transition-all ${
+                  collapsed
+                    ? "w-10 h-10 rounded-xl"
+                    : "w-full px-3 py-2.5 rounded-xl"
+                } ${
+                  pathname === "/scan-kegiatan-siswa"
                     ? "bg-emerald-400/30 ring-2 ring-emerald-300/40"
                     : "bg-emerald-500/25 hover:bg-emerald-500/35"
-                  }`}
+                }`}
               >
                 <ScanLine size={18} />
                 {showLabels && <span>Scan Siswa</span>}
@@ -439,10 +435,11 @@ export default function Sidebar({
               {/* Mobile */}
               <Link
                 href="/scan"
-                className={`lg:hidden flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl font-semibold text-sm text-white ${pathname === "/scan"
-                  ? "bg-indigo-700"
-                  : "bg-gradient-to-r from-indigo-600 to-indigo-700"
-                  }`}
+                className={`lg:hidden flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl font-semibold text-sm text-white ${
+                  pathname === "/scan"
+                    ? "bg-indigo-700"
+                    : "bg-gradient-to-r from-indigo-600 to-indigo-700"
+                }`}
               >
                 <ScanLine size={18} />
                 <span>Scan Absensi</span>
@@ -450,10 +447,11 @@ export default function Sidebar({
 
               <Link
                 href="/scan-kegiatan-siswa"
-                className={`lg:hidden flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl font-semibold text-sm text-white ${pathname === "/scan-kegiatan-siswa"
-                  ? "bg-emerald-700"
-                  : "bg-gradient-to-r from-emerald-500 to-teal-600"
-                  }`}
+                className={`lg:hidden flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl font-semibold text-sm text-white ${
+                  pathname === "/scan-kegiatan-siswa"
+                    ? "bg-emerald-700"
+                    : "bg-gradient-to-r from-emerald-500 to-teal-600"
+                }`}
               >
                 <ScanLine size={18} />
                 <span>Scan Siswa</span>
@@ -468,19 +466,23 @@ export default function Sidebar({
             <Link
               href="/profil"
               title={collapsed ? "Profil Saya" : undefined}
-              className={`flex items-center gap-3 rounded-xl transition-all duration-200 ${collapsed ? "justify-center p-2.5" : "px-3 py-2.5"
-                } ${isProfilActive
+              className={`flex items-center gap-3 rounded-xl transition-all duration-200 ${
+                collapsed ? "justify-center p-2.5" : "px-3 py-2.5"
+              } ${
+                isProfilActive
                   ? "bg-white/20 text-white ring-1 ring-white/25 shadow-md lg:bg-white/20 lg:text-white bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600"
                   : "text-indigo-100/85 hover:bg-white/10 hover:text-white lg:text-indigo-100/85 lg:hover:bg-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/80 hover:text-indigo-600"
-                }`}
+              }`}
             >
               {/* Avatar inisial */}
               <div
-                className={`shrink-0 flex items-center justify-center rounded-lg font-bold text-xs ${collapsed ? "w-8 h-8" : "w-8 h-8"
-                  } ${isProfilActive
+                className={`shrink-0 flex items-center justify-center rounded-lg font-bold text-xs ${
+                  collapsed ? "w-8 h-8" : "w-8 h-8"
+                } ${
+                  isProfilActive
                     ? "bg-white/30 text-white"
                     : "bg-white/20 text-white lg:bg-white/20 lg:text-white bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
-                  }`}
+                }`}
               >
                 {inisial || <UserCircle2 size={16} />}
               </div>
@@ -491,10 +493,11 @@ export default function Sidebar({
                     {userName || "Profil Saya"}
                   </p>
                   <p
-                    className={`text-[11px] truncate ${isProfilActive
-                      ? "text-white/70 lg:text-white/70 text-indigo-400"
-                      : "text-indigo-200/60 lg:text-indigo-200/60 text-gray-400"
-                      }`}
+                    className={`text-[11px] truncate ${
+                      isProfilActive
+                        ? "text-white/70 lg:text-white/70 text-indigo-400"
+                        : "text-indigo-200/60 lg:text-indigo-200/60 text-gray-400"
+                    }`}
                   >
                     Lihat & edit profil
                   </p>

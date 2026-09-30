@@ -3,8 +3,9 @@
 import { useState, type ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import MobileBottomNav from "./MobileBottomNav";
 
-type UserRole = "ADMIN" | "PIMPINAN" | "GURU" | "STAFF" | "ORTU";
+type UserRole = "ADMIN" | "PIMPINAN" | "GURU" | "STAFF" | "PIKET" | "ORTU";
 
 interface Props {
   children: ReactNode;
@@ -12,19 +13,18 @@ interface Props {
 }
 
 export function DashboardShell({ children, role }: Props) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
 
-  const sidebarExpanded = sidebarOpen || sidebarHovered;
+  const sidebarExpanded = sidebarHovered;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <Sidebar
         role={role}
-        isOpen={sidebarOpen}
+        isOpen={false}
         isExpanded={sidebarExpanded}
         onHoverChange={setSidebarHovered}
-        onClose={() => setSidebarOpen(false)}
+        onClose={() => undefined}
       />
 
       <div
@@ -32,10 +32,14 @@ export function DashboardShell({ children, role }: Props) {
           sidebarExpanded ? "lg:ml-64" : "lg:ml-20"
         }`}
       >
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+        <Header />
 
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] lg:p-6">
+          {children}
+        </main>
       </div>
+
+      <MobileBottomNav role={role} />
     </div>
   );
 }
