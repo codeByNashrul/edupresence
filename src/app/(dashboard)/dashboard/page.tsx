@@ -42,6 +42,7 @@ import { PelanggaranDashboardSection } from "@/components/dashboard/PelanggaranD
 import {
   UpcomingEventsSidebar,
   UpcomingEventsInline,
+  preloadUpcomingEvents,
 } from "@/components/dashboard/UpcomingEventsWidget";
 
 interface JadwalItem {
@@ -954,11 +955,20 @@ export default function DashboardPage() {
     Boolean(session?.user?.id) &&
     userRoles.length > 0;
 
+  useEffect(() => {
+    void preloadUpcomingEvents().catch((error) => {
+      console.error("DASHBOARD_KALENDER_PRELOAD_ERROR:", error);
+    });
+  }, []);
+
   const today = formatDate(new Date());
   const isToday = selectedDate === today;
 
   async function fetchDashboard() {
-    setLoading(true);
+    if (!data) {
+      setLoading(true);
+    }
+
     setDashboardError("");
 
     /*
@@ -973,18 +983,55 @@ export default function DashboardPage() {
         });
       }
 
-      let dashboardRes = await requestDashboard();
+      const transientStatuses = new Set([
+        401, 408, 425, 429, 500, 502, 503, 504,
+      ]);
 
       /*
-       * Saat hard reload, session cookie/token kadang belum selesai
-       * dibaca oleh route API. Beri satu kesempatan retry.
+       * HP / jaringan mobile / tunnel kadang membutuhkan waktu lebih
+       * lama sampai session dan route API benar-benar siap.
+       *
+       * Maksimal 3 percobaan:
+       * 1. langsung
+       * 2. +350 ms
+       * 3. +900 ms
        */
-      if ([401, 408, 429, 500, 502, 503, 504].includes(dashboardRes.status)) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, 600);
-        });
+      const retryDelays = [0, 350, 900];
 
-        dashboardRes = await requestDashboard();
+      let dashboardRes: Response | null = null;
+      let requestError: unknown = null;
+
+      for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+        const delay = retryDelays[attempt];
+
+        if (delay > 0) {
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, delay);
+          });
+        }
+
+        try {
+          dashboardRes = await requestDashboard();
+          requestError = null;
+        } catch (error) {
+          requestError = error;
+
+          if (attempt < retryDelays.length - 1) {
+            continue;
+          }
+
+          throw error;
+        }
+
+        if (!transientStatuses.has(dashboardRes.status)) {
+          break;
+        }
+      }
+
+      if (!dashboardRes) {
+        throw requestError instanceof Error
+          ? requestError
+          : new Error("Dashboard tidak dapat dihubungi");
       }
 
       const dashboardData = await dashboardRes.json().catch(() => null);

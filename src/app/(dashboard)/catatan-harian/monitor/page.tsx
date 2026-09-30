@@ -43,7 +43,9 @@ export default function MonitorCatatanHarianPage() {
   async function fetchCatatan() {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        scope: "monitor",
+      });
       if (tanggal) params.set("tanggal", tanggal);
       if (selectedStaff) params.set("userId", selectedStaff);
 

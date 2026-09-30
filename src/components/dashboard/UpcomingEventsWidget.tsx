@@ -26,6 +26,53 @@ interface KalenderEvent {
   tanggalSelesai: string;
 }
 
+const kalenderCache = new Map<number, KalenderEvent[]>();
+const kalenderPending = new Map<number, Promise<KalenderEvent[]>>();
+
+async function loadKalenderEvents(
+  tahun = new Date().getFullYear(),
+): Promise<KalenderEvent[]> {
+  const cached = kalenderCache.get(tahun);
+
+  if (cached) {
+    return cached;
+  }
+
+  const pending = kalenderPending.get(tahun);
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
+    const res = await fetch(`/api/kalender-akademik?tahun=${tahun}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Gagal mengambil kalender akademik (${res.status})`);
+    }
+
+    const result = await res.json();
+    const events: KalenderEvent[] = Array.isArray(result) ? result : [];
+
+    kalenderCache.set(tahun, events);
+
+    return events;
+  })().finally(() => {
+    kalenderPending.delete(tahun);
+  });
+
+  kalenderPending.set(tahun, request);
+
+  return request;
+}
+
+export function preloadUpcomingEvents() {
+  return loadKalenderEvents();
+}
+
 // ─── Tipe config (mirror dari kalender-akademik page) ─────────────────────────
 const TIPE_CONFIG: Record<
   TipeKalender,
@@ -131,9 +178,7 @@ export function UpcomingEventsSidebar() {
   useEffect(() => {
     async function fetch_() {
       try {
-        const tahun = new Date().getFullYear();
-        const res = await fetch(`/api/kalender-akademik?tahun=${tahun}`);
-        const data = await res.json();
+        const data = await loadKalenderEvents();
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -242,9 +287,7 @@ export function UpcomingEventsInline() {
   useEffect(() => {
     async function fetch_() {
       try {
-        const tahun = new Date().getFullYear();
-        const res = await fetch(`/api/kalender-akademik?tahun=${tahun}`);
-        const data = await res.json();
+        const data = await loadKalenderEvents();
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 

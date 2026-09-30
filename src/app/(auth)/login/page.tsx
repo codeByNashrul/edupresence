@@ -27,6 +27,11 @@ const mobileFeatures = [
 
 type LoginMode = "staff" | "ortu";
 
+/**
+ * The LoginPage component renders the login page of the application.
+ * It allows users to log in using their NIP (staff) or NIS (student's parent).
+ * The component supports both desktop and mobile views.
+ */
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<LoginMode>("staff");

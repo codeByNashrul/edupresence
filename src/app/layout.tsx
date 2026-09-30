@@ -1,15 +1,16 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Manrope } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { ThemeProvider } from "next-themes";
 import AuthProvider from "@/components/providers/AuthProvider";
 
 import "./globals.css";
 
-const plusJakarta = Plus_Jakarta_Sans({
+const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-plus-jakarta",
+  variable: "--font-manrope",
+  display: "swap",
 });
 
 const APP_NAME = "EduPresence";
@@ -77,7 +78,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <body className={`${plusJakarta.className} antialiased`}>
+      <body className={`${manrope.className} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

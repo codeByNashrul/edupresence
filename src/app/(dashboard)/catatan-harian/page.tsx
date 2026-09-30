@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { Check, CheckCircle } from "lucide-react";
 
 interface CatatanHarian {
   id: string;
@@ -11,11 +9,17 @@ interface CatatanHarian {
   hasil: string;
   kendala: string | null;
   foto: string[];
+  user?: {
+    id: string;
+    nama: string;
+    nip: string;
+  };
 }
 
 export default function CatatanHarianPage() {
   const [catatan, setCatatan] = useState<CatatanHarian | null>(null);
   const [riwayat, setRiwayat] = useState<CatatanHarian[]>([]);
+  const [aktivitasStaff, setAktivitasStaff] = useState<CatatanHarian[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -34,25 +38,50 @@ export default function CatatanHarianPage() {
 
   async function fetchCatatan() {
     setLoading(true);
+
     try {
-      // Catatan hari ini
-      const res = await fetch(`/api/catatan-harian?tanggal=${today}`);
-      const data = await res.json();
-      if (data.length > 0) {
-        const c = data[0];
+      const [res, riwayatRes, aktivitasRes] = await Promise.all([
+        fetch(`/api/catatan-harian?scope=mine&tanggal=${today}`),
+        fetch("/api/catatan-harian?scope=mine"),
+        fetch("/api/catatan-harian?scope=team"),
+      ]);
+
+      const [data, riwayatData, aktivitasData] = await Promise.all([
+        res.json(),
+        riwayatRes.json(),
+        aktivitasRes.json(),
+      ]);
+
+      // Catatan milik sendiri hari ini
+      const catatanHariIni = Array.isArray(data) ? data : [];
+
+      if (catatanHariIni.length > 0) {
+        const c = catatanHariIni[0];
+
         setCatatan(c);
+
         setForm({
           kegiatan: c.kegiatan,
           hasil: c.hasil,
           kendala: c.kendala ?? "",
           foto: c.foto ?? [],
         });
+      } else {
+        setCatatan(null);
+
+        setForm({
+          kegiatan: "",
+          hasil: "",
+          kendala: "",
+          foto: [],
+        });
       }
 
-      // Riwayat 7 hari terakhir
-      const riwayatRes = await fetch("/api/catatan-harian");
-      const riwayatData = await riwayatRes.json();
-      setRiwayat(riwayatData);
+      // Riwayat pribadi
+      setRiwayat(Array.isArray(riwayatData) ? riwayatData : []);
+
+      // Transparansi aktivitas seluruh staff hari ini
+      setAktivitasStaff(Array.isArray(aktivitasData) ? aktivitasData : []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -271,6 +300,84 @@ export default function CatatanHarianPage() {
                   : "Simpan Catatan"}
             </button>
           </form>
+        )}
+      </div>
+
+      {/* Aktivitas Staff Hari Ini */}
+      <div className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+            Aktivitas Staff Hari Ini
+          </h2>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Aktivitas seluruh staff pada hari ini.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 text-center text-gray-400">
+            Memuat aktivitas staff...
+          </div>
+        ) : aktivitasStaff.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 text-center text-gray-400">
+            Belum ada aktivitas staff hari ini
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {aktivitasStaff.map((aktivitas) => {
+              const milikSaya = aktivitas.id === catatan?.id;
+
+              return (
+                <div
+                  key={aktivitas.id}
+                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5"
+                >
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">
+                        {milikSaya ? "Anda" : (aktivitas.user?.nama ?? "Staff")}
+                      </p>
+
+                      {!milikSaya && aktivitas.user?.nip && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          NIP: {aktivitas.user.nip}
+                        </p>
+                      )}
+                    </div>
+
+                    {milikSaya && (
+                      <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                        Catatan Saya
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Kegiatan
+                      </p>
+
+                      <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                        {aktivitas.kegiatan}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Hasil
+                      </p>
+
+                      <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                        {aktivitas.hasil}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
