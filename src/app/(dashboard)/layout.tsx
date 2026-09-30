@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <AuthProvider>
+    <AuthProvider session={session}>
       <DashboardShell
         role={
           session.user.role as "ADMIN" | "PIMPINAN" | "GURU" | "STAFF" | "ORTU"
