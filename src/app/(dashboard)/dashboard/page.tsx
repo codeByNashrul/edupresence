@@ -2018,7 +2018,22 @@ export default function DashboardPage() {
               </p>
 
               <p className="mt-2 text-sm text-gray-700 dark:text-gray-200">
-                {catatanHarian.kegiatan}
+                {catatanHarian.kegiatan
+                  .split(/\r?\n/)
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+                  .map((item, index) => (
+                    <span
+                      key={`${item}-${index}`}
+                      className="flex items-start gap-2 py-0.5"
+                    >
+                      <span
+                        className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500"
+                        aria-hidden="true"
+                      />
+                      <span>{item.replace(/^[-•]\s*/, "")}</span>
+                    </span>
+                  ))}
               </p>
 
               <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
@@ -2029,7 +2044,8 @@ export default function DashboardPage() {
                 {catatanHarian.hasil}
               </p>
 
-              {catatanHarian.kendala && (
+              {catatanHarian.kendala?.trim() &&
+              catatanHarian.kendala.trim() !== "-" ? (
                 <>
                   <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-amber-600">
                     Kendala
@@ -2039,6 +2055,16 @@ export default function DashboardPage() {
                     {catatanHarian.kendala}
                   </p>
                 </>
+              ) : (
+                <div className="mt-4 flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                  <span
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-xs font-bold dark:bg-emerald-950/40"
+                    aria-hidden="true"
+                  >
+                    ✓
+                  </span>
+                  <span>Tidak ada kendala</span>
+                </div>
               )}
             </div>
           ) : (
