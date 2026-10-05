@@ -47,6 +47,16 @@ export async function GET(req: Request) {
       });
     }
 
+    if (process.env.STAFF_ATTENDANCE_SEND_ENABLED !== "true") {
+      return NextResponse.json({
+        ok: true,
+        action: "HOLD",
+        tanggal: key,
+        message:
+          "Pengiriman kehadiran staff ditahan sampai automation KirimYo grup Staff dikonfigurasi.",
+      });
+    }
+
     if (key !== STAFF_RECAP_FIRST_RUN_DATE) {
       return NextResponse.json({
         ok: true,
