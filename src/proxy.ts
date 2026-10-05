@@ -20,7 +20,11 @@ const PUBLIC_PREFIXES = [
   "/~offline",
 ];
 
-const PUBLIC_EXACT_PATHS = new Set(["/api/cron/monitoring-kbm"]);
+const PUBLIC_EXACT_PATHS = new Set([
+  "/api/cron/monitoring-kbm",
+  "/api/cron/rekap-kehadiran-staff",
+  "/api/cron/rekap-kehadiran-staff/first-run",
+]);
 
 const DIRECTORY_ROUTES = ["/guru", "/staff", "/siswa"];
 
