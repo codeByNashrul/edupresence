@@ -2,7 +2,7 @@
 
 import { Role, StatusAbsensi, TipeAbsensi } from "@prisma/client";
 
-import { sendKirimYoAutomationWebhook } from "@/lib/kirimyo";
+import { sendKirimYoStaffAttendanceWebhook } from "@/lib/kirimyo";
 import { prisma } from "@/lib/prisma";
 import { todayJakarta } from "@/lib/time";
 
@@ -129,7 +129,7 @@ export async function sendStaffAttendanceRecap(tanggal = todayJakarta()) {
 
   const eventId = `edupresence-staff-attendance:${recap.date}:morning`;
 
-  const kirimyo = await sendKirimYoAutomationWebhook({
+  const kirimyo = await sendKirimYoStaffAttendanceWebhook({
     eventId,
     date: recap.date,
     block: "KEHADIRAN STAFF",

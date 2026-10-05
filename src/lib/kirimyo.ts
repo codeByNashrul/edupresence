@@ -162,3 +162,68 @@ export async function sendKirimYoAutomationWebhook(params: {
     queued: body.queued === true,
   };
 }
+
+export async function sendKirimYoStaffAttendanceWebhook(params: {
+  eventId: string;
+  date: string;
+  block: string;
+  message: string;
+}) {
+  const webhookUrl = requiredEnv("KIRIMYO_STAFF_ATTENDANCE_WEBHOOK_URL");
+  const webhookSecret = requiredEnv("KIRIMYO_STAFF_ATTENDANCE_WEBHOOK_SECRET");
+
+  if (!params.eventId.trim()) {
+    throw new Error("Event ID Kehadiran Staff tidak boleh kosong");
+  }
+
+  if (!params.message.trim()) {
+    throw new Error("Pesan Kehadiran Staff tidak boleh kosong");
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-KirimYo-Webhook-Secret": webhookSecret,
+      "Idempotency-Key": params.eventId,
+    },
+    body: JSON.stringify({
+      eventId: params.eventId,
+      type: "staff_attendance_recap",
+      date: params.date,
+      block: params.block,
+      message: params.message,
+    }),
+    cache: "no-store",
+  });
+
+  let body: KirimYoAutomationWebhookResponse | null = null;
+
+  try {
+    body = (await response.json()) as KirimYoAutomationWebhookResponse;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok || body?.success !== true) {
+    throw new Error(
+      body?.message ||
+        `KirimYo Automation Kehadiran Staff gagal menerima event (${response.status})`,
+    );
+  }
+
+  const runId = body.data?.runId;
+
+  if (!runId) {
+    throw new Error(
+      "KirimYo Automation Kehadiran Staff menerima event tetapi tidak mengembalikan run ID",
+    );
+  }
+
+  return {
+    runId,
+    status: body.data?.status ?? null,
+    duplicate: body.duplicate === true,
+    queued: body.queued === true,
+  };
+}
