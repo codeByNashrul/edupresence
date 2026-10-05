@@ -34,7 +34,7 @@ function statusLabel(status: StatusAbsensi | null) {
       return "✅ Hadir";
 
     case StatusAbsensi.TERLAMBAT:
-      return "⏰ Terlambat";
+      return "✅ Hadir";
 
     case StatusAbsensi.IZIN:
       return "📝 Izin";
