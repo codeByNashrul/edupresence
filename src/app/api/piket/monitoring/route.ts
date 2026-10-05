@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { HariMinggu } from "@prisma/client";
+import { HariMinggu } from "@/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";

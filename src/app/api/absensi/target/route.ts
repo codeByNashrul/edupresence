@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Role, StatusAbsensi } from "@prisma/client";
+import { Role, StatusAbsensi } from "@/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";

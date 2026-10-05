@@ -4,7 +4,7 @@ import {
   SapaanGuru,
   SemesterAkademik,
   StatusTukarJadwal,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
 

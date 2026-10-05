@@ -1,4 +1,4 @@
-import { MonitoringKbmDispatchStatus } from "@prisma/client";
+import { MonitoringKbmDispatchStatus } from "@/generated/prisma/client";
 
 import { sendKirimYoAutomationWebhook } from "@/lib/kirimyo";
 import { prisma } from "@/lib/prisma";

@@ -3,7 +3,7 @@ import {
   SumberAbsensi,
   StatusAbsensi,
   TipeAbsensi,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";

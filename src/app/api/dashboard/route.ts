@@ -4,7 +4,7 @@ import {
   StatusAbsensi,
   type HariMinggu,
   type SemesterAkademik,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";

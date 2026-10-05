@@ -1,6 +1,6 @@
 // EDUPRESENCE_STAFF_ATTENDANCE_V1_1_BY_NAME
 
-import { Role, StatusAbsensi, TipeAbsensi } from "@prisma/client";
+import { Role, StatusAbsensi, TipeAbsensi } from "@/generated/prisma/client";
 
 import { sendKirimYoStaffAttendanceWebhook } from "@/lib/kirimyo";
 import { prisma } from "@/lib/prisma";

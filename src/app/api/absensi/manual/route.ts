@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { todayJakarta, nowJakarta, dayJakarta } from "@/lib/time";
-import { HariMinggu, Role, StatusAbsensi, SumberAbsensi } from "@prisma/client";
+import { HariMinggu, Role, StatusAbsensi, SumberAbsensi } from "@/generated/prisma/client";
 
 const STATUS_MANUAL: StatusAbsensi[] = [
   StatusAbsensi.HADIR,

@@ -7,7 +7,7 @@ import {
   StatusAbsensi,
   StatusTukarJadwal,
   TipeAbsensi,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";

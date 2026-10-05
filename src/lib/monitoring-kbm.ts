@@ -5,7 +5,7 @@ import {
   StatusAbsensi,
   StatusIzin,
   TipeAbsensi,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 
 import { getJadwalEfektif } from "@/lib/jadwal-efektif";
 import { prisma } from "@/lib/prisma";

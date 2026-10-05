@@ -1,4 +1,4 @@
-import { SapaanGuru } from "@prisma/client";
+import { SapaanGuru } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 

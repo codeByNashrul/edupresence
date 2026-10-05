@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { Role } from "@/generated/prisma/client";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 

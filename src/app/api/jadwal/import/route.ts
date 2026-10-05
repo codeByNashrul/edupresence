@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
-import type { HariMinggu, Prisma, SemesterAkademik } from "@prisma/client";
+import type { HariMinggu, Prisma, SemesterAkademik } from "@/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
 

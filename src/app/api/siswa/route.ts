@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import crypto from "crypto";
 
 import { prisma } from "@/lib/prisma";

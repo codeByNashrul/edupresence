@@ -1,4 +1,4 @@
-import { MonitoringKbmDispatchStatus, Prisma, Role } from "@prisma/client";
+import { MonitoringKbmDispatchStatus, Prisma, Role } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
