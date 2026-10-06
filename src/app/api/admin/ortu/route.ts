@@ -11,7 +11,20 @@ export async function GET() {
   }
 
   const list = await prisma.userOrtu.findMany({
-    include: { siswa: { include: { kelas: true } } },
+    select: {
+      id: true,
+      nama: true,
+      nis: true,
+      siswaId: true,
+      aktif: true,
+      createdAt: true,
+      updatedAt: true,
+      siswa: {
+        include: {
+          kelas: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(list);
@@ -45,6 +58,20 @@ export async function POST(req: Request) {
       nis: siswa.nis, // NIS siswa = username login ortu
       password: hashed,
       siswaId,
+    },
+    select: {
+      id: true,
+      nama: true,
+      nis: true,
+      siswaId: true,
+      aktif: true,
+      createdAt: true,
+      updatedAt: true,
+      siswa: {
+        include: {
+          kelas: true,
+        },
+      },
     },
   });
 
