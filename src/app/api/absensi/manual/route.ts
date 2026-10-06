@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isPrismaUniqueConstraintError } from "@/lib/prisma-errors";
 import { auth } from "@/lib/auth";
 import { todayJakarta, nowJakarta, dayJakarta } from "@/lib/time";
-import { HariMinggu, Role, StatusAbsensi, SumberAbsensi } from "@/generated/prisma/client";
+import {
+  HariMinggu,
+  Role,
+  StatusAbsensi,
+  SumberAbsensi,
+} from "@/generated/prisma/client";
 
 const STATUS_MANUAL: StatusAbsensi[] = [
   StatusAbsensi.HADIR,
@@ -173,6 +179,13 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: "Jadwal ini sudah memiliki absensi." },
+        { status: 409 },
+      );
+    }
+
     console.error("ABSENSI_MANUAL_ERROR:", error);
 
     return NextResponse.json({ error: "Server error" }, { status: 500 });

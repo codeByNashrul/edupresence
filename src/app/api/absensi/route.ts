@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Role, StatusAbsensi, TipeAbsensi } from "@/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { isPrismaUniqueConstraintError } from "@/lib/prisma-errors";
 import { auth } from "@/lib/auth";
 import { nowJakarta, todayJakarta, timeJakarta } from "@/lib/time";
 import { getJadwalEfektif } from "@/lib/jadwal-efektif";
@@ -383,6 +384,13 @@ export async function POST(req: Request) {
       ditukarDengan,
     });
   } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: "Absensi ini sudah tercatat. Silakan muat ulang data." },
+        { status: 409 },
+      );
+    }
+
     console.error("ABSENSI_ERROR:", error);
 
     return NextResponse.json({ error: "Server error" }, { status: 500 });

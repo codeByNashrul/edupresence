@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isPrismaUniqueConstraintError } from "@/lib/prisma-errors";
 import { nowJakarta, timeJakarta, todayJakarta } from "@/lib/time";
 
 const ROLE_INPUT_MANUAL = new Set<Role>([Role.ADMIN, Role.PIKET]);
@@ -313,6 +314,13 @@ export async function POST(req: Request) {
       waktu: timeJakarta(),
     });
   } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: "Absensi pegawai untuk jenis ini sudah tercatat hari ini." },
+        { status: 409 },
+      );
+    }
+
     console.error("ABSENSI_MANUAL_KEHADIRAN_ERROR:", error);
 
     return NextResponse.json({ error: "Server error" }, { status: 500 });
