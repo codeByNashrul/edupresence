@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { isPrismaUniqueConstraintError } from "@/lib/prisma-errors";
 import { nowJakarta, timeJakarta, todayJakarta } from "@/lib/time";
 
-const ROLE_INPUT_MANUAL = new Set<Role>([Role.ADMIN, Role.PIKET]);
+const ROLE_INPUT_MANUAL = new Set<Role>([Role.ADMIN]);
 
 const STATUS_MANUAL = new Set<StatusAbsensi>([
   StatusAbsensi.HADIR,
@@ -26,11 +26,7 @@ const TIPE_KEHADIRAN = new Set<TipeAbsensi>([
   TipeAbsensi.PULANG,
 ]);
 
-const ROLE_LIHAT_KEHADIRAN = new Set<Role>([
-  Role.ADMIN,
-  Role.PIKET,
-  Role.PIMPINAN,
-]);
+const ROLE_LIHAT_KEHADIRAN = new Set<Role>([Role.ADMIN, Role.PIMPINAN]);
 
 export async function GET() {
   try {
@@ -160,7 +156,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Hanya admin dan petugas piket yang dapat menginput absensi manual",
+            "Hanya admin yang dapat menginput kehadiran pegawai secara manual",
         },
         { status: 403 },
       );

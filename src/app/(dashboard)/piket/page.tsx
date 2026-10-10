@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   AlertCircle,
@@ -99,6 +99,10 @@ export default function PiketPage() {
 
   const canInputManual = sessionRoles.has("ADMIN") || sessionRoles.has("PIKET");
 
+  // Kehadiran pegawai (BERANGKAT/PULANG) adalah kewenangan ADMIN.
+  // PIKET tetap dapat input manual JAM_MENGAJAR.
+  const canManageKehadiran = sessionRoles.has("ADMIN");
+
   const [monitoring, setMonitoring] =
     useState<MonitoringResponse>(emptyMonitoring);
 
@@ -137,7 +141,7 @@ export default function PiketPage() {
   const [errorKehadiran, setErrorKehadiran] = useState("");
   const [successKehadiran, setSuccessKehadiran] = useState("");
 
-  async function loadMonitoring() {
+  const loadMonitoring = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -165,9 +169,9 @@ export default function PiketPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function loadKehadiranPegawai() {
+  const loadKehadiranPegawai = useCallback(async () => {
     try {
       setKehadiranLoading(true);
 
@@ -192,24 +196,41 @@ export default function PiketPage() {
     } finally {
       setKehadiranLoading(false);
     }
-  }
+  }, []);
 
   async function refreshAll() {
-    await Promise.allSettled([loadMonitoring(), loadKehadiranPegawai()]);
+    if (canManageKehadiran) {
+      await Promise.allSettled([loadMonitoring(), loadKehadiranPegawai()]);
+      return;
+    }
+
+    await loadMonitoring();
   }
 
   useEffect(() => {
-    loadMonitoring();
-    loadKehadiranPegawai();
+    const initialLoad = window.setTimeout(() => {
+      void loadMonitoring();
+
+      if (canManageKehadiran) {
+        void loadKehadiranPegawai();
+      }
+    }, 0);
 
     const interval = window.setInterval(() => {
-      loadMonitoring();
-      loadKehadiranPegawai();
+      void loadMonitoring();
+
+      if (canManageKehadiran) {
+        void loadKehadiranPegawai();
+      }
     }, 60_000);
+
     function handleOnline() {
       setOnline(true);
-      loadMonitoring();
-      loadKehadiranPegawai();
+      void loadMonitoring();
+
+      if (canManageKehadiran) {
+        void loadKehadiranPegawai();
+      }
     }
 
     function handleOffline() {
@@ -217,17 +238,15 @@ export default function PiketPage() {
     }
 
     window.addEventListener("online", handleOnline);
-
     window.addEventListener("offline", handleOffline);
 
     return () => {
+      window.clearTimeout(initialLoad);
       window.clearInterval(interval);
-
       window.removeEventListener("online", handleOnline);
-
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [canManageKehadiran, loadMonitoring, loadKehadiranPegawai]);
 
   function openWhatsApp(guru: MonitoringGuru) {
     if (!guru.noWa) {
@@ -498,13 +517,17 @@ Terima kasih.`;
           <button
             type="button"
             onClick={refreshAll}
-            disabled={loading || kehadiranLoading}
+            disabled={loading || (canManageKehadiran && kehadiranLoading)}
             className="rounded-xl bg-white/20 p-3 transition hover:bg-white/30 disabled:opacity-60"
             title="Perbarui seluruh data"
           >
             <RefreshCw
               size={20}
-              className={loading || kehadiranLoading ? "animate-spin" : ""}
+              className={
+                loading || (canManageKehadiran && kehadiranLoading)
+                  ? "animate-spin"
+                  : ""
+              }
             />
           </button>
         </div>
@@ -557,7 +580,10 @@ Terima kasih.`;
       </div>
 
       {/* Kehadiran pegawai */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+      <div
+        hidden={!canManageKehadiran}
+        className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6"
+      >
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
@@ -879,7 +905,7 @@ Terima kasih.`;
       </div>
 
       {/* Modal kehadiran pegawai */}
-      {pegawaiManual && (
+      {canManageKehadiran && pegawaiManual && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5 dark:border-gray-800">
