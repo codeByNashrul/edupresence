@@ -22,6 +22,10 @@ function dateKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function isSundayJakarta(key: string) {
+  return new Date(`${key}T12:00:00+07:00`).getUTCDay() === 0;
+}
+
 export async function GET(req: Request) {
   try {
     if (!authorized(req)) {
@@ -44,6 +48,15 @@ export async function GET(req: Request) {
         totalStaff: recap.totalStaff,
         message: recap.message,
         staff: recap.staff,
+      });
+    }
+
+    if (isSundayJakarta(key)) {
+      return NextResponse.json({
+        ok: true,
+        action: "SKIP_SUNDAY",
+        tanggal: key,
+        message: "Rekap kehadiran staff hanya dikirim Senin sampai Sabtu.",
       });
     }
 
