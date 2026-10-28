@@ -66,7 +66,7 @@ export async function GET(req: Request) {
         action: "HOLD",
         tanggal: key,
         message:
-          "Pengiriman kehadiran staff ditahan sampai automation KirimYo grup Staff dikonfigurasi.",
+          "Pengiriman kehadiran staff ditahan. Aktifkan STAFF_ATTENDANCE_SEND_ENABLED setelah Fonnte dikonfigurasi.",
       });
     }
 
@@ -88,7 +88,7 @@ export async function GET(req: Request) {
         tanggal: key,
         eventId: result.eventId,
         totalStaff: result.recap.totalStaff,
-        kirimyo: result.kirimyo,
+        whatsapp: result.whatsapp,
       },
       { status: 202 },
     );

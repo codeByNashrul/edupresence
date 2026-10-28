@@ -75,7 +75,7 @@ export async function GET(req: Request) {
         tanggal: key,
         eventId: result.eventId,
         totalStaff: result.recap.totalStaff,
-        kirimyo: result.kirimyo,
+        whatsapp: result.whatsapp,
       },
       { status: 202 },
     );
