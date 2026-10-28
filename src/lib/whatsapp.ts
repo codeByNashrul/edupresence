@@ -3,7 +3,7 @@ const FONNTE_SEND_URL = "https://api.fonnte.com/send";
 type FonnteSendResponse = {
   status?: boolean;
   detail?: string;
-  id?: number | number[];
+  id?: number | string | Array<number | string>;
   process?: string;
   requestid?: number | string;
   target?: string | string[];
@@ -88,6 +88,13 @@ export async function sendWhatsAppMessage(params: {
 export async function sendStaffAttendanceWhatsApp(message: string) {
   return sendWhatsAppMessage({
     target: requiredEnv("FONNTE_STAFF_GROUP_ID"),
+    message,
+  });
+}
+
+export async function sendMonitoringKbmWhatsApp(message: string) {
+  return sendWhatsAppMessage({
+    target: requiredEnv("FONNTE_KBM_GROUP_ID"),
     message,
   });
 }

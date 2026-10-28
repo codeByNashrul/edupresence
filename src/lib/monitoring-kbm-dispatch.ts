@@ -1,14 +1,15 @@
 import { MonitoringKbmDispatchStatus } from "@/generated/prisma/client";
 
-import { sendKirimYoAutomationWebhook } from "@/lib/kirimyo";
 import { prisma } from "@/lib/prisma";
+import { sendMonitoringKbmWhatsApp } from "@/lib/whatsapp";
 
 export type ProcessMonitoringDispatchResult =
   | {
       action: "QUEUED";
       dispatchId: string;
-      kirimyoRunId: string;
-      duplicate: boolean;
+      provider: "fonnte";
+      providerMessageId: string | null;
+      requestId: number | string | null;
       attempts: number;
     }
   | {
@@ -20,7 +21,7 @@ export type ProcessMonitoringDispatchResult =
 
 function errorMessage(error: unknown) {
   const message =
-    error instanceof Error ? error.message : "Pengiriman KirimYo gagal";
+    error instanceof Error ? error.message : "Pengiriman WhatsApp gagal";
 
   return message.slice(0, 2000);
 }
@@ -109,8 +110,6 @@ export async function processMonitoringKbmDispatch(
     },
     select: {
       id: true,
-      tanggal: true,
-      label: true,
       pesan: true,
       attempts: true,
     },
@@ -120,36 +119,27 @@ export async function processMonitoringKbmDispatch(
     throw new Error("Dispatch monitoring hilang setelah claim");
   }
 
-  const tanggal = dispatch.tanggal.toISOString().slice(0, 10);
-
-  const blockKey = dispatch.label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  if (!blockKey) {
-    throw new Error("Label blok Monitoring KBM tidak valid");
-  }
-
   /*
-   * Event identity bersifat deterministic untuk satu kejadian KBM.
+   * Penting untuk Fonnte:
    *
-   * Contoh:
-   * kbm:2026-09-29:jam-1-2
+   * Kalau provider belum menerima pesan dan terjadi error,
+   * dispatch boleh menjadi FAILED agar dapat dicoba ulang.
    *
-   * Retry EduPresence memakai eventId / Idempotency-Key yang sama,
-   * sehingga KirimYo mengembalikan AutomationRun yang sama.
+   * Tetapi kalau Fonnte SUDAH menerima pesan lalu pencatatan DB gagal,
+   * jangan ubah kembali menjadi FAILED. Membiarkan PROCESSING lebih aman
+   * daripada melakukan retry otomatis yang berisiko mengirim pesan ganda.
    */
-  const eventId = `kbm:${tanggal}:${blockKey}`;
+  let acceptedByProvider = false;
 
   try {
-    const kirimyo = await sendKirimYoAutomationWebhook({
-      eventId,
-      date: tanggal,
-      block: dispatch.label,
-      message: dispatch.pesan,
-    });
+    const whatsapp = await sendMonitoringKbmWhatsApp(dispatch.pesan);
+
+    acceptedByProvider = true;
+
+    const firstMessageId = whatsapp.messageIds[0];
+
+    const providerMessageId =
+      firstMessageId === undefined ? null : String(firstMessageId);
 
     await prisma.monitoringKbmDispatch.update({
       where: {
@@ -157,12 +147,12 @@ export async function processMonitoringKbmDispatch(
       },
       data: {
         /*
-         * QUEUED di ledger EduPresence berarti event sudah diterima
-         * secara durable oleh KirimYo. Delivery WhatsApp tetap menjadi
-         * concern pipeline KirimYo.
+         * QUEUED berarti Fonnte sudah menerima request dan memasukkan
+         * pesan ke antrean pengiriman. Ini belum berarti delivery
+         * WhatsApp sudah terkonfirmasi.
          */
         status: MonitoringKbmDispatchStatus.QUEUED,
-        kirimyoAutomationRunId: kirimyo.runId,
+        providerMessageId,
         error: null,
       },
     });
@@ -170,21 +160,35 @@ export async function processMonitoringKbmDispatch(
     return {
       action: "QUEUED",
       dispatchId: dispatch.id,
-      kirimyoRunId: kirimyo.runId,
-      duplicate: kirimyo.duplicate,
+      provider: whatsapp.provider,
+      providerMessageId,
+      requestId: whatsapp.requestId,
       attempts: dispatch.attempts,
     };
   } catch (error) {
-    await prisma.monitoringKbmDispatch.updateMany({
-      where: {
-        id: dispatch.id,
-        status: MonitoringKbmDispatchStatus.PROCESSING,
-      },
-      data: {
-        status: MonitoringKbmDispatchStatus.FAILED,
+    if (!acceptedByProvider) {
+      await prisma.monitoringKbmDispatch.updateMany({
+        where: {
+          id: dispatch.id,
+          status: MonitoringKbmDispatchStatus.PROCESSING,
+        },
+        data: {
+          status: MonitoringKbmDispatchStatus.FAILED,
+          error: errorMessage(error),
+        },
+      });
+    } else {
+      /*
+       * Provider sudah menerima pesan.
+       *
+       * Jangan menandai FAILED karena retry otomatis berpotensi
+       * mengirim pesan yang sama dua kali.
+       */
+      console.error("MONITORING_KBM_PROVIDER_ACCEPTED_PERSIST_FAILED", {
+        dispatchId: dispatch.id,
         error: errorMessage(error),
-      },
-    });
+      });
+    }
 
     throw error;
   }
